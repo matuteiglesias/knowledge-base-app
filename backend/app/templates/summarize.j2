@@ -1,0 +1,14 @@
+You are a concise summarizer.
+Use ONLY the numbered context paragraphs below to answer the question.
+
+Question: {{ query }}
+
+Context paragraphs:
+{% for item in docs %}
+[{{ loop.index }}] ({{ item.paper_id }}:{{ item.pages or "?" }}) — {{ item.text_snippet }}
+{% endfor %}
+
+Instructions:
+- Produce a single concise paragraph summary answering the question.
+- After each factual sentence include a bracketed provenance marker like [1] referencing the context paragraph that supports it.
+- Keep under 200 words.

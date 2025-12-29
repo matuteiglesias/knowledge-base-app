@@ -1,0 +1,44 @@
+# --- secrets ---
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+**/.env.local
+
+# --- python ---
+**/__pycache__/
+*.pyc
+*.pyo
+
+# --- node / next ---
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/tsconfig.tsbuildinfo
+
+# --- runtime / generated ---
+logs/
+scripts/logs/
+api_test_results/
+pydoc/
+*.pid
+.uvicorn.pid
+.pydoc.pid
+fixture/chroma_fallback/
+
+# --- local state / databases ---
+store/
+chroma_migrated/
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+
+# --- backups ---
+.backup_run_*/
+*.bkp
+
+# --- downloads (copyright + huge) ---
+downloads/
+

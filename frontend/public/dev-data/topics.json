@@ -1,0 +1,60 @@
+{
+    "topics": [
+        {
+            "topic_id": "t-001",
+            "label": "Migration Policy",
+            "count": 15,
+            "key_phrases": ["immigration", "labor markets", "policy reform"],
+            "top_papers": [
+                {"paper_id": "paper-010", "title": "Economic Effects of Immigration"},
+                {"paper_id": "paper-003", "title": "Labor Market Impacts of Migration"}
+            ],
+            "top_snippets": [
+                {"chunk_id": "paper-010-chunk-0002", "paper_id": "paper-010", "text": "Restrictions on immigration ..."},
+                {"chunk_id": "paper-003-chunk-0005", "paper_id": "paper-003", "text": "Examined labor-market outcomes ..."}
+            ]
+        },
+        {
+            "topic_id": "t-002",
+            "label": "Climate Change",
+            "count": 20,
+            "key_phrases": ["global warming", "carbon emissions", "renewable energy"],
+            "top_papers": [
+                {"paper_id": "paper-020", "title": "Impact of Carbon Emissions on Climate"},
+                {"paper_id": "paper-015", "title": "Renewable Energy Adoption"}
+            ],
+            "top_snippets": [
+                {"chunk_id": "paper-020-chunk-0001", "paper_id": "paper-020", "text": "Carbon emissions have increased ..."},
+                {"chunk_id": "paper-015-chunk-0003", "paper_id": "paper-015", "text": "Adoption of renewable energy ..."}
+            ]
+        },
+        {
+            "topic_id": "t-003",
+            "label": "Artificial Intelligence",
+            "count": 10,
+            "key_phrases": ["machine learning", "neural networks", "AI ethics"],
+            "top_papers": [
+                {"paper_id": "paper-030", "title": "Advances in Neural Networks"},
+                {"paper_id": "paper-025", "title": "Ethical Implications of AI"}
+            ],
+            "top_snippets": [
+                {"chunk_id": "paper-030-chunk-0004", "paper_id": "paper-030", "text": "Neural networks have revolutionized ..."},
+                {"chunk_id": "paper-025-chunk-0002", "paper_id": "paper-025", "text": "Ethical concerns in AI include ..."}
+            ]
+        },
+        {
+            "topic_id": "t-004",
+            "label": "Healthcare Policy",
+            "count": 12,
+            "key_phrases": ["universal healthcare", "health insurance", "policy reform"],
+            "top_papers": [
+                {"paper_id": "paper-040", "title": "Universal Healthcare Models"},
+                {"paper_id": "paper-035", "title": "Health Insurance Reform"}
+            ],
+            "top_snippets": [
+                {"chunk_id": "paper-040-chunk-0005", "paper_id": "paper-040", "text": "Universal healthcare systems ..."},
+                {"chunk_id": "paper-035-chunk-0001", "paper_id": "paper-035", "text": "Reforms in health insurance ..."}
+            ]
+        }
+    ]
+}

@@ -1,0 +1,65 @@
+%% components_pruned.mmd — pruned component / wiring graph for Paper-KB frontend
+graph LR
+  %% Pages
+  HP["/health/papers\n(src/app/health/papers/page.tsx)"]
+  HC["/health/chunks\n(src/app/health/chunks/page.tsx)"]
+  PAPER["/papers/:id\n(src/app/papers/paper-001/page.tsx)"]
+  SEARCH["/search\n(src/app/search/page.tsx)"]
+  TOPICS["/topics\n(src/app/topics/page.tsx)"]
+  TEST["/test\n(src/app/test/page.tsx)"]
+  APIDOCS["/api-docs\n(src/app/api-docs/page.tsx)"]
+
+  %% Containers
+  PAPERS_CARD["PapersCard\n(src/components/containers/PapersCard.tsx)"]
+  CHUNKS_CARD["ChunksCard\n(src/components/containers/ChunksCard.tsx)"]
+  PAPER_CARD["PapersCard / viewer"]
+
+  %% Presentational
+  PAPER_LIST["PaperList\n(src/components/presentational/PaperList.tsx)"]
+  CHUNK_LIST["ChunkList\n(src/components/presentational/ChunkList.tsx)"]
+
+  %% Hooks / Lib
+  USE_PAPERS["usePapers\n(src/hooks/usePapers.ts)"]
+  USE_CHUNKS["usePaperChunks\n(src/hooks/usePaperChunks.ts)"]
+  API_LIB["API wrapper\n(src/lib/api.ts)"]
+  NORMALIZERS["normalizers\n(src/lib/normalizers.ts)"]
+  TYPES["types\n(src/types.ts)"]
+
+  %% UI / dev helpers
+  UI_PRIMS["UI primitives\n(src/components/ui/*)"]
+  DEV_DATA["dev-data fallback\n(public/dev-data/*)"]
+  STORYBOOK["Storybook / stories\n(src/stories, __stories__)"]
+  BACKEND["Backend endpoints\n(/api/papers, /api/papers?paper_id=ID, /openapi.json)"]
+
+  %% Wiring
+  HP --> PAPERS_CARD
+  HC --> PAPERS_CARD
+  HC --> CHUNKS_CARD
+  PAPER --> PAPER_CARD
+  TEST --> PAPERS_CARD
+  TEST --> CHUNKS_CARD
+  APIDOCS --> API_LIB
+
+  PAPERS_CARD --> USE_PAPERS
+  PAPERS_CARD --> PAPER_LIST
+  PAPERS_CARD --> UI_PRIMS
+
+  CHUNKS_CARD --> USE_CHUNKS
+  CHUNKS_CARD --> CHUNK_LIST
+  CHUNKS_CARD --> UI_PRIMS
+
+  PAPER_CARD --> UI_PRIMS
+  PAPER_LIST --> TYPES
+  CHUNK_LIST --> TYPES
+
+  USE_PAPERS --> API_LIB
+  USE_PAPERS --> NORMALIZERS
+  USE_CHUNKS --> API_LIB
+  USE_CHUNKS --> NORMALIZERS
+  NORMALIZERS --> TYPES
+  API_LIB --> BACKEND
+  API_LIB -.-> DEV_DATA
+  TEST -.-> DEV_DATA
+  STORYBOOK --> PAPER_LIST
+  STORYBOOK --> UI_PRIMS
+  UI_PRIMS --> USE_PAPERS

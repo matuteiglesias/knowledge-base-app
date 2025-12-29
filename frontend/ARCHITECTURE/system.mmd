@@ -1,0 +1,13 @@
+%% system.mmd — High level overview
+graph LR
+  Browser["Browser (User)"]
+  Next["Next.js (frontend)"]
+  Proxy["Next Proxy / Rewrites"]
+  FastAPI["FastAPI backend (127.0.0.1:9000)"]
+  Chroma["Chroma DB (sqlite / store/chroma)"]
+  CDN["Static / Public (public/)"]
+  Browser --> Next
+  Next -->|/api/* proxy| Proxy
+  Proxy --> FastAPI
+  FastAPI --> Chroma
+  Next --> CDN

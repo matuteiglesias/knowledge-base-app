@@ -1,0 +1,18 @@
+%% dataflow.mmd — sequence for 'open paper -> show chunks -> summarize'
+sequenceDiagram
+  participant U as User
+  participant P as PapersCard (hook usePapers)
+  participant API as FastAPI
+  participant N as normalizePaper/normalizeChunk
+  participant C as ChunkList
+
+  U->>P: open app /health/papers
+  P->>API: GET /api/papers?t=...
+  API-->>P: { papers: [...] }
+  P->>N: normalizePaper(...)
+  N-->>P: normalized papers
+  U->>P: select paper
+  P->>API: GET /api/papers?paper_id=...
+  API-->>P: { chunks: [...] }
+  P->>N: normalizeChunk(...)
+  N-->>C: chunk list

@@ -1,0 +1,95 @@
+%% components_pruned.mmd — pruned component / wiring graph for Paper-KB frontend
+graph LR
+  %% --- Pages (app routes) ---
+  subgraph Pages
+    HP["/health/papers\n(src/app/health/papers/page.tsx)"]
+    HC["/health/chunks\n(src/app/health/chunks/page.tsx)"]
+    PAPER["/papers/:id\n(src/app/papers/paper-001/page.tsx)"]
+    SEARCH["/search\n(src/app/search/page.tsx)"]
+    TOPICS["/topics\n(src/app/topics/page.tsx)"]
+    TEST["/test\n(src/app/test/page.tsx)"]
+    APIDOCS["/api-docs\n(src/app/api-docs/page.tsx)"]
+  end
+
+  %% --- Container components (data + behavior) ---
+  subgraph Containers
+    PapersCard["PapersCard\n(src/components/containers/PapersCard.tsx)"]
+    ChunksCard["ChunksCard\n(src/components/containers/ChunksCard.tsx)"]
+    PapersCard["PapersCard / PapersCard-like viewer"]
+  end
+
+  %% --- Presentational components (render-only) ---
+  subgraph Presentational
+    PaperList["PaperList\n(src/components/presentational/PaperList.tsx)"]
+    ChunkList["ChunkList\n(src/components/presentational/ChunkList.tsx)"]
+  end
+
+  %% --- Hooks / State layer ---
+  subgraph Hooks
+    usePapers["usePapers\n(src/hooks/usePapers.ts)"]
+    usePaperChunks["usePaperChunks\n(src/hooks/usePaperChunks.ts)"]
+    useMobile["use-mobile\n(src/hooks/use-mobile.ts)"]
+  end
+
+  %% --- Shared library / types ---
+  subgraph Lib
+    API["API wrapper\n(src/lib/api.ts)"]
+    Normalizers["normalizers\n(src/lib/normalizers.ts)"]
+    Types["canonical types\n(src/types.ts)"]
+  end
+
+  %% --- Utilities / external context (grouped) ---
+  UI["UI primitives\n(src/components/ui/*)"]
+  DevData["dev-data fallback\n(public/dev-data/*)"]
+  Story["Storybook / stories\n(src/stories, src/components/__stories__)"]
+  BackendAPI["Backend endpoints\n(/api/papers, /api/papers?paper_id=ID, /openapi.json)"]
+
+  %% --- Main wiring (pages -> containers -> hooks -> lib -> backend / types) ---
+  HP --> PapersCard
+  HC --> PapersCard
+  HC --> ChunksCard
+  PAPER --> PapersCard
+  TEST --> PapersCard
+  TEST --> ChunksCard
+  APIDOCS --> API
+
+  PapersCard --> usePapers
+  PapersCard --> PaperList
+  PapersCard --> UI
+
+  ChunksCard --> usePaperChunks
+  ChunksCard --> ChunkList
+  ChunksCard --> UI
+
+  PapersCard --> UI
+  PaperList --> Types
+  ChunkList --> Types
+
+  usePapers --> API
+  usePapers --> Normalizers
+  usePaperChunks --> API
+  usePaperChunks --> Normalizers
+
+  Normalizers --> Types
+  API --> BackendAPI
+  API -.fallback.-> DevData
+  TEST -.uses-.-> DevData
+
+  %% Storybook / design system usage
+  Story --> PaperList
+  Story --> UI
+
+  %% Misc: UI primitives depend on some hooks like use-mobile (sidebar uses it)
+  UI --> useMobile
+
+  %% Small annotation nodes (for clarity)
+  classDef pages fill:#f8f9fa,stroke:#bbb;
+  classDef containers fill:#fff4e6,stroke:#dfb;
+  classDef presentational fill:#ecfbf1,stroke:#bfe;
+  classDef hooks fill:#eef2ff,stroke:#bcd;
+  classDef lib fill:#fff0f6,stroke:#f8c;
+  class Pages HP,HC,PAPER,SEARCH,TOPICS,TEST,APIDOCS;
+  class containers PapersCard,ChunksCard,PapersCard;
+  class presentational PaperList,ChunkList;
+  class hooks usePapers,usePaperChunks,useMobile;
+  class lib API,Normalizers,Types;

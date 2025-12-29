@@ -1,0 +1,7 @@
+%% state.mmd — state owners
+graph TB
+  Local["Local component state (selection, UI)"]
+  Hooks["Hook cache (usePapers, usePaperChunks)"]
+  Server["Backend state / Chroma / cached jsonl"]
+  Local --> Hooks
+  Hooks --> Server

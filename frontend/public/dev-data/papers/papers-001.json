@@ -1,0 +1,59 @@
+{
+    "paper_id":"paper-001",
+    "title":"Analyzing the Economic Fallout from the COVID-19 Pandemic",
+    "authors":["Andreas Warner","M. Lopez"],
+    "year":2021,
+    "tags":["economics","covid","policy"],
+    "imported_at":"2025-11-02T10:30:00Z",
+    "n_chunks":5,
+    "summaries":[
+      { "id":"s1","type":"TL;DR","summary_text":"Pandemic shock reduced GDP by X% in year 1. Fiscal transfers softened household welfare.", "cached_at":"2025-11-02T11:10:00Z", "used_chunks":["paper-001-chunk-0001","paper-001-chunk-0003"] }
+    ],
+    "chunks":[
+      {
+        "chunk_id":"paper-001-chunk-0001",
+        "pos":1,
+        "text":"The COVID-19 pandemic created a sudden stop in services demand and disrupted international supply chains. In this paper we document macro outcomes across regions ...",
+        "pages":"1",
+        "header_path":"Introduction",
+        "parent_chunk_id":null,
+        "char_len":320
+      },
+      {
+        "chunk_id":"paper-001-chunk-0002",
+        "pos":2,
+        "text":"We estimate local labor market impacts using administrative payroll data. The identification strategy exploits variation in ...",
+        "pages":"2",
+        "header_path":"Methods",
+        "parent_chunk_id":null,
+        "char_len":210
+      },
+      {
+        "chunk_id":"paper-001-chunk-0003",
+        "pos":3,
+        "text":"Our findings suggest that regions with higher pre-pandemic reliance on tourism experienced sharper declines in employment and output. The role of fiscal policy in mitigating these effects is discussed ...",
+        "pages":"3",
+        "header_path":"Results",
+        "parent_chunk_id":null,
+        "char_len":290
+      },
+      {
+        "chunk_id":"paper-001-chunk-0004",
+        "pos":4,
+        "text":"Policy recommendations include targeted fiscal transfers to affected households and businesses, as well as investments in digital infrastructure to support remote work ...",
+        "pages":"4",
+        "header_path":"Policy Implications",
+        "parent_chunk_id":null,
+        "char_len":250
+      },
+      {
+        "chunk_id":"paper-001-chunk-0005",
+        "pos":5,
+        "text":"In conclusion, the COVID-19 pandemic has underscored the importance of resilient economic systems and the need for coordinated global responses to future crises ...",
+        "pages":"5",
+        "header_path":"Conclusion",
+        "parent_chunk_id":null,
+        "char_len":200
+      }
+    ]
+}

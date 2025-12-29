@@ -1,0 +1,50 @@
+{
+    "n": 6,
+    "papers": [
+      {
+        "paper_id": "paper-001",
+        "title": "Analyzing the Economic Fallout from the COVID-19 Pandemic",
+        "authors": ["Andreas Warner", "M. Lopez"],
+        "year": 2021,
+        "tags": ["economics","covid","policy"],
+        "imported_at": "2025-11-02T10:30:00Z",
+        "n_chunks": 12,
+        "last_updated": "2025-11-02T11:00:00Z",
+        "has_summary": true
+      },
+      {
+        "paper_id": "paper-002",
+        "title": "Advancements in Renewable Energy Technologies",
+        "authors": ["Samantha Green", "Liam O'Connor"],
+        "year": 2020,
+        "tags": ["renewable energy", "technology", "sustainability"],
+        "imported_at": "2025-11-03T09:15:00Z",
+        "n_chunks": 8,
+        "last_updated": "2025-11-03T09:45:00Z",
+        "has_summary": false
+      },
+      {
+        "paper_id": "paper-003",
+        "title": "Machine Learning Applications in Healthcare",
+        "authors": ["Dr. Emily Zhang", "Raj Patel"],
+        "year": 2022,
+        "tags": ["machine learning", "healthcare", "AI"],
+        "imported_at": "2025-11-04T14:20:00Z",
+        "n_chunks": 15,
+        "last_updated": "2025-11-04T14:50:00Z",
+        "has_summary": true
+      },
+      {
+        "paper_id": "paper-004",
+        "title": "The Impact of Climate Change on Global Agriculture",
+        "authors": ["Carlos Rivera", "Aisha Khan"],
+        "year": 2019,
+        "tags": ["climate change", "agriculture", "environment"],
+        "imported_at": "2025-11-05T08:00:00Z",
+        "n_chunks": 10,
+        "last_updated": "2025-11-05T08:30:00Z",
+        "has_summary": false
+      }
+
+    ]
+  }

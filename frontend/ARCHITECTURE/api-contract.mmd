@@ -1,0 +1,9 @@
+%% api-contract.mmd — endpoints the frontend depends on
+graph LR
+  API_LIST["/api/papers"] 
+  API_PAPER["/api/papers?paper_id=ID"]
+  OPENAPI["/openapi.json"]
+
+  API_LIST --> LIST_DESC["GET list of papers\n(returns body.papers)"]
+  API_PAPER --> PAPER_DESC["GET paper details & chunks\n(returns paper + chunks)"]
+  OPENAPI --> OPENAPI_DESC["OpenAPI JSON\n(used by docs)"]

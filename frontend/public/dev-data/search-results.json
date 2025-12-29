@@ -1,0 +1,73 @@
+{
+    "query": "effects of climate change",
+    "results": [
+        {
+            "chunk_id": "paper-005-chunk-0003",
+            "score": 0.987,
+            "text": "Climate change leads to higher temperatures, rising sea levels, and more extreme weather events. Coastal cities are vulnerable ...",
+            "paper_id": "paper-005",
+            "paper_title": "Modeling the Impacts of Climate Change",
+            "header_path": "Discussion"
+        },
+        {
+            "chunk_id": "paper-012-chunk-0001",
+            "score": 0.912,
+            "text": "The effects of climate change are evident in the increased frequency of hurricanes and droughts worldwide.",
+            "paper_id": "paper-012",
+            "paper_title": "Global Climate Patterns and Their Disruption",
+            "header_path": "Introduction"
+        },
+        {
+            "chunk_id": "paper-019-chunk-0004",
+            "score": 0.875,
+            "text": "Rising sea levels due to melting polar ice caps threaten low-lying regions and island nations.",
+            "paper_id": "paper-019",
+            "paper_title": "Sea Level Rise: Causes and Consequences",
+            "header_path": "Findings"
+        }
+    ],
+    "additional_queries": [
+        {
+            "query": "renewable energy solutions",
+            "results": [
+                {
+                    "chunk_id": "paper-021-chunk-0002",
+                    "score": 0.945,
+                    "text": "Solar and wind energy are among the most promising renewable energy sources to combat climate change.",
+                    "paper_id": "paper-021",
+                    "paper_title": "Advances in Renewable Energy Technologies",
+                    "header_path": "Abstract"
+                },
+                {
+                    "chunk_id": "paper-034-chunk-0005",
+                    "score": 0.899,
+                    "text": "Hydropower and geothermal energy provide stable and reliable renewable energy options.",
+                    "paper_id": "paper-034",
+                    "paper_title": "Sustainable Energy for the Future",
+                    "header_path": "Conclusion"
+                }
+            ]
+        },
+        {
+            "query": "biodiversity loss",
+            "results": [
+                {
+                    "chunk_id": "paper-045-chunk-0003",
+                    "score": 0.932,
+                    "text": "Deforestation and habitat destruction are major drivers of biodiversity loss worldwide.",
+                    "paper_id": "paper-045",
+                    "paper_title": "The Crisis of Biodiversity Loss",
+                    "header_path": "Overview"
+                },
+                {
+                    "chunk_id": "paper-052-chunk-0001",
+                    "score": 0.881,
+                    "text": "Climate change exacerbates biodiversity loss by altering ecosystems and species distributions.",
+                    "paper_id": "paper-052",
+                    "paper_title": "Climate Change and Its Impact on Biodiversity",
+                    "header_path": "Discussion"
+                }
+            ]
+        }
+    ]
+}

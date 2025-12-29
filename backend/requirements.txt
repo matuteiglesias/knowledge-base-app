@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+chromadb
+openai
+numpy
+scikit-learn
+umap-learn
+python-dotenv

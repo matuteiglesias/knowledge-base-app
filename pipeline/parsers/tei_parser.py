@@ -1,0 +1,343 @@
+#!/usr/bin/env python3
+"""
+src/tei_to_jsonl.py
+
+Usage:
+  python src/tei_to_jsonl.py /path/to/tei_dir /path/to/out_dir [--embed] [--min-len 50]
+
+What it does:
+ - Finds all .tei.xml files under INPUT_DIR (non-recursive).
+ - Parses each TEI with lxml (TEI namespace aware).
+ - Extracts paragraph-level chunks (joins <s> into a paragraph if present).
+ - Preserves xml:id when present, else creates synthetic chunk ids.
+ - Parses coords/bboxes if present and derives page ranges.
+ - Writes per-paper JSONL: <paper_id>_chunks.jsonl and per-paper embeddings (if --embed).
+ - Writes combined all_chunks.jsonl and all_embs.jsonl (if --embed).
+"""
+
+import json
+from pathlib import Path
+from typing import List, Dict, Tuple, Optional, Any, Callable
+from lxml import etree
+import re
+
+# from shared.config import NS, XML_NS_ID
+
+
+
+# ---------------------------------------------------------------------------
+# TEI / Grobid constants used by parsers
+# ---------------------------------------------------------------------------
+NS = {"tei": "http://www.tei-c.org/ns/1.0"}   # used by TEI parser modules
+XML_NS_ID = "{http://www.w3.org/XML/1998/namespace}id"
+# GROBID_URL = _p("GROBID_URL", "http://localhost:8070/api/processFulltextDocument")
+
+
+
+# best-effort imports
+try:
+    from lxml import etree
+    LXML_AVAILABLE = True
+except Exception:
+    LXML_AVAILABLE = False
+
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except Exception:
+    BS4_AVAILABLE = False
+
+
+
+
+# -----------------------
+# Small helpers (pure)
+# -----------------------
+def parse_coords_string(coords_str: Optional[str]) -> Optional[List[str]]:
+    """Return list-like parsed blocks from coords string (legacy)."""
+    if not coords_str:
+        return None
+    # normalize separators and trim
+    blocks = [b.strip() for b in str(coords_str).split(";") if b.strip()]
+    return blocks if blocks else None
+
+def parse_pages_from_coords(coords_str: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
+    if not coords_str:
+        return (None, None)
+    nums = re.findall(r"\d+", str(coords_str))
+    if not nums:
+        return (None, None)
+    nums = [int(n) for n in nums]
+    # return (min(nums), max(nums))
+    return min(nums)
+
+def parse_bboxes_from_coords(coords_str: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+    """Try to parse coords blocks like `page,x,y,h,w;...` into list of dicts."""
+    if not coords_str:
+        return None
+    parts = []
+    for block in str(coords_str).split(";"):
+        block = block.strip()
+        if not block:
+            continue
+        items = [it.strip() for it in block.split(",")]
+        if len(items) >= 5:
+            try:
+                parts.append({
+                    "page": int(items[0]) if items[0].isdigit() else items[0],
+                    "x": float(items[1]),
+                    "y": float(items[2]),
+                    "h": float(items[3]),
+                    "w": float(items[4]),
+                })
+            except Exception:
+                parts.append({"raw": block})
+        else:
+            parts.append({"raw": block})
+    return parts if parts else None
+
+def extract_title_from_lxml(root) -> Optional[str]:
+    nodes = root.xpath("//tei:teiHeader//tei:title", namespaces=NS)
+    if nodes:
+        t = nodes[0].text
+        return t.strip() if t else None
+    # fallback: common <title>
+    nodes = root.xpath("//title")
+    if nodes and nodes[0].text:
+        return nodes[0].text.strip()
+    return None
+
+def extract_authors_from_lxml(root) -> List[str]:
+    authors = []
+    for pers in root.xpath("//tei:sourceDesc//tei:author//tei:persName", namespaces=NS):
+        fn = pers.find("tei:forename", namespaces=NS)
+        sn = pers.find("tei:surname", namespaces=NS)
+        parts = []
+        if fn is not None and fn.text:
+            parts.append(fn.text.strip())
+        if sn is not None and sn.text:
+            parts.append(sn.text.strip())
+        name = " ".join(parts).strip()
+        if name:
+            authors.append(name)
+    return authors
+
+
+def _assemble_chunk(xml_id: Optional[str],
+                    text: str,
+                    section_title: Optional[str],
+                    section_number: Optional[str],
+                    unit: str,
+                    coords_raw: Optional[str],
+                    bboxes: Optional[List[Dict]] = None) -> Dict[str, Any]:
+    """
+    Minimal walker: returns a plain raw chunk dict used by canonicalizer.
+    Keep it dumb - parsing extras should be normalized later by normalize_chunk.
+    """
+    # keep parse helpers outside so this stays lightweight
+    pages = None
+    boxes = bboxes
+    return {
+        "xml_id": xml_id,
+        "text": text or "",
+        "unit": unit,
+        "section_title": section_title,
+        "section_number": section_number,
+        "coords_raw": coords_raw,
+        "bboxes": boxes,
+    }
+
+
+def walk_body_to_chunks_lxml(root, canonical_id_fn=None) -> List[Dict[str, Any]]:
+    chunks: List[Dict[str, Any]] = []
+    # attempt to find <body>
+    body_nodes = root.xpath("//tei:text//tei:body", namespaces=NS) or root.xpath("//tei:body", namespaces=NS) or root.xpath("//body")
+    if not body_nodes:
+        # fallback: search for paragraphs anywhere
+        p_nodes = root.xpath("//tei:p", namespaces=NS) or root.findall(".//p")
+        for p in p_nodes:
+            text = "".join(p.itertext()).strip()
+            xmlid = p.get(XML_NS_ID) or p.get("xml:id") or p.get("id")
+            coords = p.get("coords") or p.get("bboxes") or ""
+            boxes = parse_coords_string(coords)
+            first,last = parse_pages_from_coords(coords)
+            chunks.append({
+                "xml_id": xmlid,
+                "text": text,
+                "unit": "para",
+                "section_title": None,
+                "section_number": None,
+                "pages": (first,last),
+                # "bboxes": boxes
+            })
+        return chunks
+
+    body = body_nodes[0]
+    # get divs (sections) or treat body as single section
+    divs = body.xpath(".//tei:div", namespaces=NS) or [body]
+    for div_idx, div in enumerate(divs):
+        head = div.find("tei:head", namespaces=NS)
+        section_title = head.text.strip() if head is not None and head.text else f"section-{div_idx}"
+        section_number = head.get("n") if head is not None else None
+
+        # paragraph nodes (if sentences inside, we'll dissolve)
+        p_nodes = div.xpath(".//tei:p", namespaces=NS)
+        if not p_nodes:
+            # maybe sentences only
+            s_nodes = div.xpath(".//tei:s", namespaces=NS)
+            for s in s_nodes:
+                xmlid = s.get(XML_NS_ID) or s.get("xml:id") or s.get("id")
+                text = "".join(s.itertext()).strip()
+                coords_raw = s.get("coords") or s.get("bboxes") or ""
+                chunks.append(_assemble_chunk(xmlid, text, section_title, section_number, "sent", coords_raw))
+            continue
+
+        for p in p_nodes:
+            s_children = p.xpath(".//tei:s", namespaces=NS)
+            if s_children:
+                # join sentences into paragraph text but keep bbox list accumulated
+                texts = []
+                boxes_acc = []
+                for s in s_children:
+                    st = "".join(s.itertext()).strip()
+                    if st:
+                        texts.append(st)
+                    coords_raw = s.get("coords") or s.get("bboxes") or ""
+                    b = parse_bboxes_from_coords(coords_raw)
+                    if b:
+                        boxes_acc.extend(b)
+                text = " ".join(texts).strip()
+                # prefer paragraph id else first sentence id
+                xmlid = p.get(XML_NS_ID) or p.get("xml:id") or p.get("id")
+                if not xmlid and s_children:
+                    xmlid = s_children[0].get(XML_NS_ID) or s_children[0].get("xml:id") or s_children[0].get("id")
+                first_last = parse_pages_from_coords(" ".join([str(b.get("page","")) for b in boxes_acc])) if boxes_acc else (None,None)
+                chunks.append({
+                    "xml_id": xmlid,
+                    "text": text,
+                    "unit": "para",
+                    "section_title": section_title,
+                    "section_number": section_number,
+                    "pages": first_last,
+                    # "bboxes": boxes_acc if boxes_acc else None
+                })
+            else:
+                xmlid = p.get(XML_NS_ID) or p.get("xml:id") or p.get("id")
+                text = "".join(p.itertext()).strip()
+                coords_raw = p.get("coords") or p.get("bboxes") or ""
+                chunks.append(_assemble_chunk(xmlid, text, section_title, section_number, "para", coords_raw))
+    return chunks
+
+def walk_body_to_chunks_bs4(soup, canonical_id_fn=None) -> List[Dict[str, Any]]:
+    chunks: List[Dict[str, Any]] = []
+    body = soup.find("text") or soup.find("body")
+    if not body:
+        # fallback - collect all <p>
+        for p in soup.find_all("p"):
+            text = p.get_text(separator=" ", strip=True)
+            xmlid = p.get("xml:id") or p.get("id") or None
+            coords = p.get("coords") or p.get("bboxes") or None
+            chunks.append(_assemble_chunk(xmlid, text, None, None, "para", coords))
+        return chunks
+
+    sections = body.find_all("div") or [body]
+    for sec_idx, sec in enumerate(sections):
+        head = sec.find("head")
+        section_title = head.get_text(strip=True) if head else f"section-{sec_idx}"
+        section_number = head.get("n") if head else None
+        paras = sec.find_all("p") or sec.find_all("s")
+        for p in paras:
+            if p.name == "s":
+                xmlid = p.get("xml:id") or p.get("id") or None
+                text = p.get_text(separator=" ", strip=True)
+                coords = p.get("coords") or p.get("bboxes") or None
+                chunks.append(_assemble_chunk(xmlid, text, section_title, section_number, "sent", coords))
+            else:
+                s_children = p.find_all("s")
+                if s_children:
+                    texts = [s.get_text(separator=" ", strip=True) for s in s_children]
+                    # accumulate boxes if present
+                    boxes_acc = []
+                    for s in s_children:
+                        coords = s.get("coords") or s.get("bboxes") or None
+                        b = parse_bboxes_from_coords(coords)
+                        if b:
+                            boxes_acc.extend(b)
+                    text = " ".join([t for t in texts if t]).strip()
+                    xmlid = p.get("xml:id") or p.get("id") or (s_children[0].get("xml:id") if s_children else None)
+                    first_last = parse_pages_from_coords(" ".join([str(b.get("page","")) for b in boxes_acc])) if boxes_acc else (None,None)
+                    chunks.append({
+                        "xml_id": xmlid,
+                        "text": text,
+                        "unit": "para",
+                        "section_title": section_title,
+                        "section_number": section_number,
+                        "pages": first_last,
+                        "bboxes": boxes_acc if boxes_acc else None
+                    })
+                else:
+                    xmlid = p.get("xml:id") or p.get("id") or None
+                    text = p.get_text(separator=" ", strip=True)
+                    coords = p.get("coords") or p.get("bboxes") or None
+                    chunks.append(_assemble_chunk(xmlid, text, section_title, section_number, "para", coords))
+    return chunks
+
+
+
+
+# ------------------------
+# Public API
+# ------------------------
+
+
+def parse_tei_text(tei_text: str, canonical_id_fn=None) -> Dict[str, Any]:
+    """
+    Parse TEI text string. Returns dict:
+      {"title":..., "authors":[...], "chunks":[...], "paper_id":...}
+    """
+    if LXML_AVAILABLE:
+        root = etree.fromstring(tei_text.encode("utf8"))
+        title = extract_title_from_lxml(root)
+        authors = extract_authors_from_lxml(root)
+        chunks = walk_body_to_chunks_lxml(root, canonical_id_fn=canonical_id_fn)
+        paper_id = canonical_id_fn(title) if canonical_id_fn else (title or "paper")
+        return {"title": title, "authors": authors, "chunks": chunks, "paper_id": paper_id}
+
+    if BS4_AVAILABLE:
+        soup = BeautifulSoup(tei_text, features="xml")
+        # try title with simple lookup then fallback
+        title_tag = soup.find("title")
+        title = title_tag.text.strip() if title_tag and title_tag.text else None
+        authors = [p.get_text(" ", strip=True) for p in soup.find_all("persName")] if soup else []
+        chunks = walk_body_to_chunks_bs4(soup, canonical_id_fn=canonical_id_fn)
+        paper_id = canonical_id_fn(title) if canonical_id_fn else (title or "paper")
+        return {"title": title, "authors": authors, "chunks": chunks, "paper_id": paper_id}
+
+    raise RuntimeError("No XML parser available: install lxml or bs4")
+
+def parse_tei_file(path: Path, canonical_id_fn=None) -> Dict[str, Any]:
+    text = path.read_bytes()
+    if LXML_AVAILABLE:
+        parser = etree.XMLParser(recover=True, remove_comments=True)
+        try:
+            root = etree.fromstring(text, parser=parser)
+            # reuse parse_tei_text by serializing root back to str (ensures single code path)
+            tei_string = etree.tostring(root, encoding="utf8", method="xml").decode("utf8")
+            return parse_tei_text(tei_string, canonical_id_fn=canonical_id_fn)
+        except Exception:
+            # fallback to bs4 if available
+            if BS4_AVAILABLE:
+                return parse_tei_text(text.decode("utf8"), canonical_id_fn=canonical_id_fn)
+            raise
+    elif BS4_AVAILABLE:
+        return parse_tei_text(text.decode("utf8"), canonical_id_fn=canonical_id_fn)
+    else:
+        raise RuntimeError("No XML parser available")
+
+
+
+
+
+
+
+

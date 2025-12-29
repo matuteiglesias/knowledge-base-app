@@ -1,0 +1,7 @@
+%% routing.mmd — Next app routes (app dir)
+graph TD
+  HP["/health/papers"] --> HP_FILE["src/app/health/papers/page.tsx"]
+  HC["/health/chunks"] --> HC_FILE["src/app/health/chunks/page.tsx"]
+  PAPER["/papers/:id"] --> PAPER_FILE["src/app/papers/paper-001/page.tsx"]
+  ROOT["/"] --> ROOT_FILE["src/app/page.tsx"]
+  APIDOCS["/api-docs"] --> APIDOCS_FILE["src/app/api-docs/page.tsx"]
