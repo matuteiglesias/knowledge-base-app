@@ -1,0 +1,275 @@
+===== pipeline/runner/embed_runner.py =====
+#!/usr/bin/env python3
+# pipeline/runners/embed_runner.py
+"""
+Streamlined embed runner.
+
+Modes:
+ - per-paper: embed_and_upsert(paper_id, client, ...)
+ - bulk: ingest_chunks_to_chroma(chunks_dir, chroma_dir, ...)
+
+Goals:
+ - single place for client lifecycle, adapters, cache handling
+ - consistent existence check via get_chunks_for_paper
+ - clear dry-run and force semantics
+ - small failure dumps to configurable path
+"""
+from __future__ import annotations
+import argparse
+import json
+import logging
+import shutil
+import time
+import traceback
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Optional
+
+# project path is expected to be set by your runner shell (PYTHONPATH)
+# engine primitives (embedding) and helpers
+from pipeline.embedding.engine import embed_records
+from pipeline.embedding.adapters import PlaceholderAdapter, _build_default_adapter
+from pipeline.embedding.cache import EmbeddingCache
+
+# FS / models
+from backend.app import chunks_fs
+from backend.app.schemas import CanonicalChunk
+
+# chrome helpers
+from shared.chroma_helpers import (
+    get_or_create_collection,
+    add_chunks_batch,
+    add_paper,
+    get_chunks_for_paper,
+    get_chunks_for_paper_count,
+    sanitize_meta_for_chroma,
+)
+from shared.chroma_client import (
+    get_client,
+    maybe_persist,
+)
+
+
+from shared.config import CHROMA_DIR, EMBED_CACHE_DB, EMBED_DIM
+
+logger = logging.getLogger("embed_runner")
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.INFO)
+
+
+# ---------- Helpers ----------
+def load_models_for_paper(paper_id: str) -> List[CanonicalChunk]:
+    """Load canonical models for a paper, with a JSONL fallback."""
+    models = chunks_fs.read_chunks_as_models(paper_id)
+    if models:
+        return models
+    recs = chunks_fs.read_chunks_jsonl(paper_id)
+    return [chunks_fs.normalize_chunk(r, paper_id=paper_id) for r in recs]
+
+
+def _write_failure_dump(prefix: str, payload: Dict[str, Any], dumps_dir: Path = Path("/tmp")) -> Optional[Path]:
+    try:
+        dumps_dir.mkdir(parents=True, exist_ok=True)
+        short = abs(hash(prefix)) % (10**8)
+        path = dumps_dir / f"embed_fail_{prefix}_{short}.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf8")
+        logger.info("failure dump written to %s", path)
+        return path
+    except Exception:
+        logger.debug("couldn't write failure dump", exc_info=True)
+        return None
+
+
+
+
+
+
+# ---------- per-paper flow ----------
+
+# pipeline/runner/embed_runner.py (refactored embed_and_upsert)
+from shared.chroma_helpers import add_chunks_batch, add_paper, maybe_persist  # implement get_chunks_for_paper helper
+from shared.chroma_adapter import CollectionAdapter
+from pipeline.parsers.canonicalize import canonical_meta_from_chunk
+
+
+
+
+MAX_POST_UPSERT_PROBE_RETRIES = 2
+POST_UPSERT_PROBE_WAIT_SECONDS = 0.5
+
+def _validate_embeddings(embs: List[List[float]], expected_dim: int):
+    if not isinstance(embs, list):
+        raise RuntimeError("embeddings object is not a list")
+    for i, e in enumerate(embs):
+        if e is None:
+            raise RuntimeError(f"embedding[{i}] is None")
+        if not hasattr(e, "__len__"):
+            raise RuntimeError(f"embedding[{i}] not length-checkable")
+        if len(e) != expected_dim:
+            raise RuntimeError(f"embedding[{i}] dim {len(e)} != expected {expected_dim}")
+
+def post_upsert_verify_and_retry(client: Any, collection_name: str, chunk_ids: List[str]) -> bool:
+    """
+    Probe that at least one inserted id is visible via the client. Retry maybe_persist() once.
+    Returns True if probe succeeded.
+    """
+    # conservative: probe the first id
+    if not chunk_ids:
+        return True
+    probe_id = chunk_ids[0]
+    last_exc = None
+    for attempt in range(MAX_POST_UPSERT_PROBE_RETRIES + 1):
+        try:
+            coll = None
+            try:
+                coll = client.get_collection(collection_name)
+            except Exception:
+                # some client shapes give collection via client.get_collection; some helper may wrap
+                coll = None
+            if coll is not None:
+                # try a minimal get (include ids)
+                try:
+                    res = coll.get(ids=[probe_id], include=["ids", "metadatas"])
+                    if res and res.get("ids"):
+                        return True
+                except Exception:
+                    # fallback to count or query
+                    pass
+            # fallback: attempt collection count by filter (best-effort)
+            try:
+                # if you have helper get_chunks_for_paper_count, prefer that, else try coll.count() if available
+                if hasattr(coll, "count"):
+                    # some versions: coll.count() may be signatureless
+                    cnt = coll.count()
+                    if cnt and cnt > 0:
+                        return True
+            except Exception:
+                pass
+        except Exception as e:
+            last_exc = e
+
+        # if attempt < retry: request persistence and wait
+        if attempt < MAX_POST_UPSERT_PROBE_RETRIES:
+            try:
+                maybe_persist(client)
+            except Exception:
+                pass
+            time.sleep(POST_UPSERT_PROBE_WAIT_SECONDS * (attempt + 1))
+    # final failure
+    logger.warning("post_upsert_verify failed for id=%s (err=%s)", probe_id, last_exc)
+    return False
+
+
+
+def embed_and_upsert(
+    paper_id: str,
+    client: Optional[Any],
+    collection_name: str = "chunks",
+    adapter: Optional[Any] = None,
+    cache: Optional[Any] = None,
+    dry_run: bool = False,
+    force: bool = False,
+    batch_size: int = 512,
+    failure_dump_dir: Path = Path("/tmp"),
+) -> Dict[str, Any]:
+    logger.info("embed_and_upsert: %s", paper_id)
+    try:
+        models = load_models_for_paper(paper_id)
+        if not models:
+            return {"paper_id": paper_id, "status": "no_models"}
+
+        client = client or get_client(persist_directory=Path(CHROMA_DIR))
+        logger.info("embed_and_upsert client type=%s persist_dir=%s has_persist=%s", type(client), CHROMA_DIR, hasattr(client, "persist"))
+
+        # ensure we have a client created consistently
+        # if client is None:
+        #     client = get_client(persist_directory=CHROMA_DIR)  # CHROMA_DIR from shared.config
+
+        # existence check
+        if not force:
+            try:
+                existing_count = get_chunks_for_paper_count(paper_id, client=client, collection_name=collection_name)
+                if existing_count >= len(models):
+                    return {"paper_id": paper_id, "status": "skipped_existing", "n_existing": existing_count}
+            except Exception:
+                logger.debug("existence check failed; continuing", exc_info=True)
+
+        adapter = adapter or _build_default_adapter()
+        embs = embed_records(models, adapter=adapter, cache=cache, expected_dim=EMBED_DIM, batch_size=min(batch_size, 512))
+
+        if len(embs) != len(models):
+            raise RuntimeError(f"embeddings length mismatch: {len(embs)} != {len(models)}")
+
+        # strict per-embedding dimension check
+        _validate_embeddings(embs, EMBED_DIM)
+
+        chunk_ids = [str(getattr(m, "chunk_id")) for m in models]
+        docs = [getattr(m, "text", "") or "" for m in models]
+        metadatas = [sanitize_meta_for_chroma(canonical_meta_from_chunk(m)) for m in models]
+
+        if dry_run:
+            logger.info("dry-run: would upsert %d chunks for %s", len(chunk_ids), paper_id)
+            return {"paper_id": paper_id, "status": "dry_run", "n_chunks": len(chunk_ids)}
+
+        # Upsert — ensure add_chunks_batch uses provided client (it takes client param)
+        add_chunks_batch(
+            chunk_ids=chunk_ids,
+            paper_ids=[paper_id] * len(chunk_ids),
+            previews=docs,
+            metadatas=metadatas,
+            embeddings=embs,
+            client=client,
+            collection_name=collection_name,
+            batch_size=batch_size,
+        )
+
+        # Post-upsert verification / retry with persist if necessary
+        visible = post_upsert_verify_and_retry(client, collection_name, chunk_ids)
+        if not visible:
+            # Not fatal but informative: write failure dump and return "partial" status
+            msg = f"post-upsert visibility failed for paper {paper_id}"
+            logger.warning(msg)
+            _write_failure_dump(paper_id, {"paper_id": paper_id, "error": msg}, failure_dump_dir)
+            return {"paper_id": paper_id, "status": "partial_ok", "n_chunks": len(chunk_ids)}
+
+        # best-effort paper doc
+        try:
+            preview = docs[0][:200] if docs else ""
+            title = getattr(models[0], "paper_title", paper_id) or paper_id
+            add_paper(paper_id, {"paper_id": paper_id, "title": title, "n_chunks": len(models), "preview": preview}, client=client, collection_name="papers")
+        except Exception:
+            logger.debug("add_paper non-fatal failure", exc_info=True)
+
+        return {"paper_id": paper_id, "status": "ok", "n_chunks": len(chunk_ids)}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("embed_and_upsert failed for %s", paper_id)
+        _write_failure_dump(paper_id, {"paper_id": paper_id, "error": str(tb)}, failure_dump_dir)
+        return {"paper_id": paper_id, "status": "failed", "error": str(tb)}
+
+
+
+
+from shared.chroma_helpers import get_chunks_for_paper
+
+# # ---------- bulk ingest flow ----------
+# def ingest_chunks_to_chroma(
+#     chunks_dir: Path,
+#     chroma_dir: Path,
+#     collection: str = "chunks",
+#     adapter: Optional[Callable] = None,
+#     cache_db: Optional[Path] = None,
+#     batch_size: int = 256,
+#     force: bool = False,
+#     dry_run: bool = False,
+#     reset: bool = False,
+#     failure_dump_dir: Path = Path("/tmp"),
+# ) -> Dict[str, Any]:
+#     """
+#     Bulk ingest all *_chunks.jsonl under chunks_dir into chroma_dir collection.
+
+#     Returns a summary dict with processed/skipped/failed counts and details list.
+#     """
+#     chunks_dir = Path(chunks_dir).expanduser().resolve()
+#     chroma_dir = Path(chroma_dir).expanduser().resolve()
+#     client = get_client(persist_directory=chroma_
+===== TRUNCATED at 10240 bytes (file size: 32498) =====

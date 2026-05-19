@@ -179,15 +179,15 @@ Short: this memo records exactly what works, what is brittle, and the pragmatic 
 1. Produce TEI from all PDFs in `storage/downloads` (non-recursive):
 
 ```bash
-python -m pipeline.ingestion.pdf_ingestor storage/downloads/ --out-tei ./downloads/data/xmls
+python -m pipeline.adapter.pdf_ingestor storage/downloads/ --out-tei ./downloads/data/xmls
 ```
 
 2. Parse TEI files into chunks (example):
 
 ```bash
-python -m pipeline.ingestion.tei_parser downloads/data/xmls store/chunks --min-len 50
+python -m pipeline.adapter.tei_parser downloads/data/xmls store/chunks --min-len 50
 # or with embedding/upsert (disabled unless embed/upsert functions are properly wired)
-python -m pipeline.ingestion.tei_parser downloads/data/xmls store/chunks --embed --upsert --chroma-dir store/chroma
+python -m pipeline.adapter.tei_parser downloads/data/xmls store/chunks --embed --upsert --chroma-dir store/chroma
 ```
 
 3. Produce embeddings and upsert into Chroma (fresh chroma, reset):

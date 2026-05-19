@@ -3,6 +3,10 @@
 # Purpose: provide a stable interface for portfolio governance.
 # Replace placeholder targets with real commands when ready.
 
+
+PYTHONPATH=/home/matias/Documents/KB.
+
+
 PROJECT := $(notdir $(CURDIR))
 
 .PHONY: help smoke run run_all

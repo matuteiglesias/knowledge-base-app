@@ -1,3 +1,4 @@
+===== shared/chroma_client.py =====
 
 # from pipeline.parsers.canonicalize import canonical_meta_from_chunk
 
@@ -224,3 +225,5 @@ def close_client():
     finally:
         _GLOBAL_CHROMA_CLIENT = None
 
+
+===== EOF =====

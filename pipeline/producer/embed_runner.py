@@ -25,9 +25,9 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 
 # project path is expected to be set by your runner shell (PYTHONPATH)
 # engine primitives (embedding) and helpers
-from pipeline.embedding.engine import embed_records
-from pipeline.embedding.adapters import PlaceholderAdapter, _build_default_adapter
-from pipeline.embedding.cache import EmbeddingCache
+from kb.embedding.engine import embed_records
+from kb.embedding.adapters import PlaceholderAdapter, _build_default_adapter
+from kb.embedding.cache import EmbeddingCache
 
 # FS / models
 from backend.app import chunks_fs

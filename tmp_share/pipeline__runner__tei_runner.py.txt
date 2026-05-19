@@ -1,3 +1,4 @@
+===== pipeline/runner/tei_runner.py =====
 #!/usr/bin/env python3
 # pipeline/parsers/runner.py
 """
@@ -34,10 +35,10 @@ from backend.app.chunks_fs import write_chunks_jsonl, read_chunks_jsonl
 from backend.app.papers_fs import save_paper_metadata_to_fs
 
 # small utils
-from pipeline.ingestion.grobid_ingest import _sanitize_filename  # keep filename policy consistent with grobid ingest
+from pipeline.adapter.grobid_ingest import _sanitize_filename  # keep filename policy consistent with grobid ingest
 
 # embedding/upsert delegation (reuse embed_runner behavior)
-from pipeline.runner.embed_runner import embed_and_upsert  # streamlined embed runner
+from pipeline.producer.embed_runner import embed_and_upsert  # streamlined embed runner
 from shared.chroma_client import get_client
 
 from shared.chroma_helpers import sanitize_meta_for_chroma
@@ -240,102 +241,5 @@ def parse_teis_to_chunks(
     return summary
 
 
-# ---------- 2) Main orchestration (parse + optional embed/upsert delegation) ----------
-def main(
-    input_dir: str,
-    out_dir: str,
-    min_len: int = 50,
-    dry_run: bool = False,
-    force: bool = False,
-    do_embed: bool = False,
-    do_upsert: bool = False,
-    chroma_dir: Optional[str] = None,
-    collection: str = "chunks",
-    batch_size: int = 512,
-) -> Dict[str, Any]:
-    """
-    CLI entrypoint behavior:
-     - always runs parse_teis_to_chunks(input_dir -> out_dir)
-     - if do_embed or do_upsert are True, will call embed_and_upsert for each written/available paper
-    """
-    tei_dir = Path(input_dir).expanduser().resolve()
-    chunks_dir = Path(out_dir).expanduser().resolve()
-    chroma_dir = Path(chroma_dir).expanduser().resolve() if chroma_dir else None
-
-    parse_summary = parse_teis_to_chunks(tei_dir, chunks_dir, min_len=min_len, dry_run=dry_run, force=force)
-
-    embed_summary = None
-    if (do_embed or do_upsert) and not dry_run:
-        # pick up paper ids to process: those that have chunk files
-        chunk_files = sorted(list(chunks_dir.rglob("*_chunks.jsonl")))
-        if not chunk_files:
-            logger.warning("no chunk files found in %s; embedding step skipped", chunks_dir)
-            embed_summary = {"error": "no_chunks"}
-        else:
-            client = get_client(persist_directory=chroma_dir)
-            logger.info("main (tei_runner) client type=%s persist_dir=%s", type(client), chroma_dir)
-
-            embed_results: List[Dict[str, Any]] = []
-            for cf in chunk_files:
-                pid = cf.stem.replace("_chunks", "")
-                try:
-                    # delegate to embed_runner.embed_and_upsert (keeps behavior shared)
-                    res = embed_and_upsert(
-                        paper_id=pid,
-                        client=client,
-                        collection_name=collection,
-                        adapter=None,
-                        cache=None,
-                        dry_run=dry_run,
-                        force=force,
-                        batch_size=batch_size,
-                    )
-                    embed_results.append(res)
-                except Exception as exc:
-                    tb = traceback.format_exc()
-                    logger.exception("embed step failed for %s", pid)
-                    embed_results.append({"paper_id": pid, "status": "failed", "error": str(exc), "traceback": tb})
-            # persist client
-            if client is not None:
-                try:
-                    from shared.chroma_helpers import maybe_persist
-                    maybe_persist(client)
-                except Exception:
-                    logger.debug("maybe_persist failed", exc_info=True)
-            embed_summary = {"n": len(embed_results), "details": embed_results}
-
-    return {"parse": parse_summary, "embed": embed_summary}
-
-
-# ---------- CLI ----------
-def cli():
-    p = argparse.ArgumentParser(prog="tei_runner")
-    p.add_argument("input_dir", help="directory with TEI XML files")
-    p.add_argument("out_dir", help="chunks output directory (store/chunks)")
-    p.add_argument("--min-len", type=int, default=50)
-    p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--force", action="store_true", help="re-parse TEIs even if .done markers exist")
-    p.add_argument("--embed", action="store_true", help="after parsing, run embed+upsert using embed_runner")
-    p.add_argument("--upsert", action="store_true", help="same as --embed (kept for compatibility)")
-    p.add_argument("--chroma-dir", default=None, help="path to chroma persist dir for embedding/upsert")
-    p.add_argument("--collection", default="chunks")
-    p.add_argument("--batch", type=int, default=512)
-    args = p.parse_args()
-
-    summary = main(
-        args.input_dir,
-        args.out_dir,
-        min_len=args.min_len,
-        dry_run=args.dry_run,
-        force=args.force,
-        do_embed=(args.embed or args.upsert),
-        do_upsert=(args.embed or args.upsert),
-        chroma_dir=args.chroma_dir,
-        collection=args.collection,
-        batch_size=args.batch,
-    )
-    print(json.dumps({"summary": summary}, ensure_ascii=False, indent=2))
-
-
-if __name__ == "__main__":
-    cli()
+# ---------- 2) Main orchestration (parse + optional em
+===== TRUNCATED at 10240 bytes (file size: 14411) =====

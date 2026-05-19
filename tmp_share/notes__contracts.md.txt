@@ -1,0 +1,3 @@
+===== notes/contracts.md =====
+
+===== EOF =====
