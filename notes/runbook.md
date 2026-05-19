@@ -323,3 +323,48 @@ If you want, I can:
 * generate `pipeline/prompt_builder.py` that uses Jinja2 and a `templates/summarize.j2` file and an example `run_summary_job` background worker that uses it.
 
 Which do you want me to produce next?
+
+---
+
+## Chunk-set backend smoke path
+
+### 1) Generate chunk_set artifacts
+
+Run your normal TEI pipeline/writer flow so files are written to:
+
+- `artifacts/chunk_sets/*.chunk_set.json`
+
+(override destination with `PAPER_KB_CHUNK_SETS_DIR` when needed.)
+
+### 2) Start API using chunk_set storage backend
+
+```bash
+make api-chunk-set
+```
+
+Equivalent direct command:
+
+```bash
+PAPER_KB_CHUNK_SETS_DIR=artifacts/chunk_sets \
+STORAGE_BACKEND=chunk_set \
+uvicorn backend.app.main:app --reload --port 9000
+```
+
+### 3) Run smoke checks
+
+With API running locally:
+
+```bash
+make smoke-chunk-set
+```
+
+This probes:
+
+- `/`
+- `/api/_admin/papers_health`
+- `/api/papers`
+- `/api/papers/{first_paper_id}` (chunks payload)
+
+Script location:
+
+- `scripts/poke_api_chunk_set.sh`

@@ -49,7 +49,12 @@ def _first_present(mapping: Dict[str, Any], keys: Sequence[str], default: Any = 
     return default
 
 
-def _chunk_to_record(chunk: Any, *, fallback_source_file: Optional[str] = None) -> Dict[str, Any]:
+def _chunk_to_record(
+    chunk: Any,
+    *,
+    fallback_source_file: Optional[str] = None,
+    fallback_chunk_index: Optional[int] = None,
+) -> Dict[str, Any]:
     m = _to_mapping(chunk)
     meta = m.get("metadata") or m.get("meta") or {}
     if not isinstance(meta, dict):
@@ -63,17 +68,30 @@ def _chunk_to_record(chunk: Any, *, fallback_source_file: Optional[str] = None) 
     paper_id = _first_present(m, ["paper_id", "paper", "source_id"], meta.get("paper_id"))
     source_file = _first_present(m, ["source_file", "source"], meta.get("source_file") or fallback_source_file)
     header_path = _first_present(m, ["header_path", "section_title"], meta.get("header_path") or meta.get("section_title"))
+    document_id = _first_present(m, ["document_id", "document", "doc_id"], meta.get("document_id") or paper_id)
+    chunk_index = _first_present(m, ["chunk_index", "index"], meta.get("chunk_index"))
+    if chunk_index is None:
+        chunk_index = fallback_chunk_index
+    try:
+        chunk_index = int(chunk_index) if chunk_index is not None else int(fallback_chunk_index or 0)
+    except (TypeError, ValueError):
+        chunk_index = int(fallback_chunk_index or 0)
 
     clean_meta = dict(meta)
     for redundant in ("text", "content", "document"):
         clean_meta.pop(redundant, None)
 
+    text_str = str(text)
+
     return {
         "chunk_id": str(chunk_id),
-        "source_file": str(source_file) if source_file else None,
         "paper_id": str(paper_id) if paper_id else None,
+        "document_id": str(document_id) if document_id else (str(paper_id) if paper_id else None),
+        "text": text_str,
+        "chunk_index": chunk_index,
+        "char_len": len(text_str),
+        "source_file": str(source_file) if source_file else None,
         "header_path": header_path,
-        "text": str(text),
         "metadata": clean_meta,
     }
 
@@ -110,7 +128,8 @@ def write_chunk_set_artifact(
     out_path = out_dir / f"{run_id}.chunk_set.json"
 
     records: List[Dict[str, Any]] = [
-        _chunk_to_record(c, fallback_source_file=fallback_source_file) for c in chunks
+        _chunk_to_record(c, fallback_source_file=fallback_source_file, fallback_chunk_index=i)
+        for i, c in enumerate(chunks)
     ]
 
     payload: Dict[str, Any] = {

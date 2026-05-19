@@ -9,7 +9,7 @@ PYTHONPATH=/home/matias/Documents/KB.
 
 PROJECT := $(notdir $(CURDIR))
 
-.PHONY: help smoke run run_all
+.PHONY: help smoke smoke-chunk-set api-chunk-set run run_all
 
 help:
 	@echo "Project: $(PROJECT)"
@@ -32,3 +32,12 @@ run_all:
 run: run_all
 
 
+
+
+api-chunk-set:
+	PAPER_KB_CHUNK_SETS_DIR=$${PAPER_KB_CHUNK_SETS_DIR:-artifacts/chunk_sets} \
+	STORAGE_BACKEND=chunk_set \
+	uvicorn backend.app.main:app --reload --port 9000
+
+smoke-chunk-set:
+	BASE_URL=$${BASE_URL:-http://127.0.0.1:9000} ./scripts/poke_api_chunk_set.sh
