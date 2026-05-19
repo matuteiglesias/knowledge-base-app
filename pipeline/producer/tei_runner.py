@@ -39,10 +39,10 @@ from backend.app.papers_fs import save_paper_metadata_to_fs
 from pipeline.adapter.grobid_ingest import _sanitize_filename  # keep filename policy consistent with grobid ingest
 
 # embedding/upsert delegation (reuse embed_runner behavior)
-from pipeline.producer.embed_runner import embed_and_upsert  # streamlined embed runner
-from shared.chroma_client import get_client
+# embed_and_upsert is imported lazily inside main() only when --embed/--upsert is requested.
+# get_client is imported lazily only when --embed/--upsert is requested.
 
-from shared.chroma_helpers import sanitize_meta_for_chroma
+# sanitize_meta_for_chroma removed from parse-only import path.
 from pipeline.writers.chunk_set_writer import write_chunk_set_artifact, default_chunk_sets_dir
 
 logger = logging.getLogger("pipeline.parsers.runner")
@@ -82,7 +82,8 @@ def _done_marker_path(chunks_dir: Path, paper_id: str) -> Path:
 def _write_done_marker(out_dir: Path, paper_id: str, meta: Dict[str, Any]) -> None:
     ddir = Path(out_dir)
     ddir.mkdir(parents=True, exist_ok=True)
-    dpath = _done_marker_path(out_dir, paper_id)
+    dpath = _done_marker_path(ddir, paper_id)
+    dpath.parent.mkdir(parents=True, exist_ok=True)
     tmp = dpath.with_suffix(".tmp")
     tmp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf8")
     os.replace(str(tmp), str(dpath))
@@ -349,6 +350,9 @@ def main(
             logger.warning("no chunk files found in %s; embedding step skipped", chunks_dir)
             embed_summary = {"error": "no_chunks"}
         else:
+            from shared.chroma_client import get_client
+            from pipeline.producer.embed_runner import embed_and_upsert
+
             client = get_client(persist_directory=chroma_dir)
             logger.info("main (tei_runner) client type=%s persist_dir=%s", type(client), chroma_dir)
 
@@ -357,6 +361,7 @@ def main(
                 pid = cf.stem.replace("_chunks", "")
                 try:
                     # delegate to embed_runner.embed_and_upsert (keeps behavior shared)
+                    from pipeline.producer.embed_runner import embed_and_upsert
                     res = embed_and_upsert(
                         paper_id=pid,
                         client=client,
