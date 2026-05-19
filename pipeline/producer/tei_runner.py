@@ -21,6 +21,8 @@ import logging
 import os
 import time
 import traceback
+import subprocess
+import shlex
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -47,6 +49,30 @@ logger = logging.getLogger("pipeline.parsers.runner")
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(logging.INFO)
 
+
+def _is_truthy(value: Optional[str]) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _validate_chunk_set_artifact(path: Path) -> Dict[str, Any]:
+    cmd_raw = os.getenv("KB_CHUNK_SET_VALIDATOR_CMD", "kb-chunk-set-validate")
+    cmd = shlex.split(cmd_raw) + [str(path)]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        return {"ok": False, "error": f"validator_not_found: {cmd[0]}", "cmd": cmd}
+    except Exception as exc:
+        return {"ok": False, "error": f"validator_exec_error: {exc}", "cmd": cmd}
+
+    return {
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "stdout": (proc.stdout or "").strip(),
+        "stderr": (proc.stderr or "").strip(),
+        "cmd": cmd,
+    }
 
 # ---------- marker helpers ----------
 def _done_marker_path(chunks_dir: Path, paper_id: str) -> Path:
@@ -99,6 +125,8 @@ def parse_teis_to_chunks(
     failures_subdir: str = "failures",
     emit_chunk_set_artifact: bool = True,
     chunk_set_dir: Optional[Path] = None,
+    validate_chunk_set: bool = False,
+    strict_chunk_set_validation: bool = False,
 ) -> Dict[str, Any]:
     """
     Scan tei_dir for TEI XML files and produce <paper_id>_chunks.jsonl files in chunks_dir
@@ -114,7 +142,7 @@ def parse_teis_to_chunks(
     tei_files = sorted(
         [p for p in tei_dir.iterdir() if p.is_file() and (p.suffix.lower().endswith(".xml") or p.name.lower().endswith(".tei.xml"))]
     )
-    summary = {"n_input_files": len(tei_files), "n_written": 0, "n_skipped": 0, "n_failures": 0, "n_chunk_set_artifacts": 0, "files": [], "chunk_set_artifacts": [], "errors": []}
+    summary = {"n_input_files": len(tei_files), "n_written": 0, "n_skipped": 0, "n_failures": 0, "n_chunk_set_artifacts": 0, "n_chunk_set_validation_failures": 0, "files": [], "chunk_set_artifacts": [], "validation": [], "errors": []}
 
     for tei_path in tei_files:
 
@@ -232,6 +260,17 @@ def parse_teis_to_chunks(
                 summary["n_chunk_set_artifacts"] += 1
                 summary["chunk_set_artifacts"].append(str(chunk_set_path))
 
+                if validate_chunk_set:
+                    vres = _validate_chunk_set_artifact(Path(chunk_set_path))
+                    vrow = {"tei": str(tei_path), "paper_id": paper_id, "chunk_set_path": str(chunk_set_path), **vres}
+                    summary["validation"].append(vrow)
+                    if not vres.get("ok"):
+                        summary["n_chunk_set_validation_failures"] += 1
+                        msg = f"chunk_set validation failed for {chunk_set_path}: {vres.get('error') or vres.get('stderr') or vres.get('returncode')}"
+                        if strict_chunk_set_validation:
+                            raise RuntimeError(msg)
+                        logger.warning(msg)
+
             # save paper-level metadata (coerce to dict appropriately)
             if not dry_run:
                 try:
@@ -278,6 +317,8 @@ def main(
     batch_size: int = 512,
     chunk_set_dir: Optional[str] = None,
     emit_chunk_set_artifact: bool = True,
+    validate_chunk_set: bool = False,
+    strict_chunk_set_validation: bool = False,
 ) -> Dict[str, Any]:
     """
     CLI entrypoint behavior:
@@ -288,7 +329,17 @@ def main(
     chunks_dir = Path(out_dir).expanduser().resolve()
     chroma_dir = Path(chroma_dir).expanduser().resolve() if chroma_dir else None
 
-    parse_summary = parse_teis_to_chunks(tei_dir, chunks_dir, min_len=min_len, dry_run=dry_run, force=force, emit_chunk_set_artifact=emit_chunk_set_artifact, chunk_set_dir=Path(chunk_set_dir).expanduser().resolve() if chunk_set_dir else None)
+    parse_summary = parse_teis_to_chunks(
+        tei_dir,
+        chunks_dir,
+        min_len=min_len,
+        dry_run=dry_run,
+        force=force,
+        emit_chunk_set_artifact=emit_chunk_set_artifact,
+        chunk_set_dir=Path(chunk_set_dir).expanduser().resolve() if chunk_set_dir else None,
+        validate_chunk_set=validate_chunk_set,
+        strict_chunk_set_validation=strict_chunk_set_validation,
+    )
 
     embed_summary = None
     if (do_embed or do_upsert) and not dry_run:
@@ -348,7 +399,12 @@ def cli():
     p.add_argument("--batch", type=int, default=512)
     p.add_argument("--chunk-set-dir", default=None, help="directory for canonical Chunk Bus chunk_set artifacts")
     p.add_argument("--no-chunk-set", action="store_true", help="disable canonical chunk_set artifact emission")
+    p.add_argument("--validate-chunk-set", action="store_true", help="validate emitted chunk_set artifact with external validator CLI")
+    p.add_argument("--strict-chunk-set-validation", action="store_true", help="fail paper parse when chunk_set validation fails")
     args = p.parse_args()
+
+    env_validate = _is_truthy(os.getenv("VALIDATE_CHUNK_SET"))
+    env_strict = _is_truthy(os.getenv("STRICT_CHUNK_SET_VALIDATION"))
 
     summary = main(
         args.input_dir,
@@ -363,6 +419,8 @@ def cli():
         batch_size=args.batch,
         chunk_set_dir=args.chunk_set_dir,
         emit_chunk_set_artifact=not args.no_chunk_set,
+        validate_chunk_set=(args.validate_chunk_set or env_validate),
+        strict_chunk_set_validation=(args.strict_chunk_set_validation or env_strict),
     )
     print(json.dumps({"summary": summary}, ensure_ascii=False, indent=2))
 

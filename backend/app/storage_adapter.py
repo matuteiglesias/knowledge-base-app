@@ -1,31 +1,32 @@
-# paste into backend/app/storage_adapter.py (replace JsonlAdapter implementation)
 from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 import re
 import json
+import os
 
 logger = logging.getLogger(__name__)
 
-# reuse FS helpers if present (but don't rely on their exact shapes)
 try:
-    from backend.app.chunks_fs import iter_chunks_jsonl, chunk_file_for, read_chunks_as_models, get_chunk_by_id
+    from backend.app.chunks_fs import iter_chunks_jsonl, read_chunks_as_models, get_chunk_by_id
 except Exception:
-    # fallback minimal in-module functions (will be used if chunks_fs not importable)
     iter_chunks_jsonl = None
-    chunk_file_for = None
     read_chunks_as_models = None
     get_chunk_by_id = None
 
-# path defaults (hard-coded to fixture for emergency mode)
 DEFAULT_CHUNKS_DIR = Path("fixture/chunks")
 DEFAULT_PAPERS_DIR = Path("fixture/papers")
+DEFAULT_CHUNK_SETS_DIR = Path("artifacts/chunk_sets")
 _WORD_RE = re.compile(r"[a-z0-9]{2,}", re.I)
 
 
+class StorageAdapter:
+    backend_name = "unknown"
+    persisted = False
+
+
 def _normalize_pages(pages_raw) -> Optional[Tuple[Optional[int], Optional[int]]]:
-    # Accept pages as "10-10", "10", [10,10], [10], {"start":10,"end":12}
     if pages_raw is None:
         return None
     if isinstance(pages_raw, (list, tuple)):
@@ -54,33 +55,148 @@ def _normalize_pages(pages_raw) -> Optional[Tuple[Optional[int], Optional[int]]]
 
 
 def _ensure_chunk_shape(rec: Dict[str, Any]) -> Dict[str, Any]:
-    # produce a stable chunk dict that services expect
     out = {}
-    # id keys
     out["chunk_id"] = rec.get("chunk_id") or rec.get("id") or (rec.get("meta") or {}).get("chunk_id") or ""
     out["paper_id"] = rec.get("paper_id") or (rec.get("meta") or {}).get("paper_id") or ""
-    # text / preview
     text = rec.get("text")
     if text is None:
         text = rec.get("preview") or (rec.get("meta") or {}).get("preview") or ""
     out["text"] = text or ""
-    # chunk index
     try:
         out["chunk_index"] = int(rec.get("chunk_index") or (rec.get("meta") or {}).get("chunk_index") or 0)
     except Exception:
         out["chunk_index"] = 0
-    # char_len
     try:
         out["char_len"] = int(rec.get("char_len") or (rec.get("meta") or {}).get("char_len") or len(out["text"] or ""))
     except Exception:
         out["char_len"] = len(out["text"] or "")
-    # header_path / pages / meta
     out["header_path"] = rec.get("header_path") or (rec.get("meta") or {}).get("header_path")
     out["pages"] = _normalize_pages(rec.get("pages") or (rec.get("meta") or {}).get("pages"))
-    out["meta"] = rec.get("meta") or {}
-    # keep original raw for debugging if needed
+    out["meta"] = rec.get("meta") or rec.get("metadata") or {}
     out["_raw"] = rec
     return out
+
+
+class ChunkSetStorageAdapter(StorageAdapter):
+    backend_name = "chunk-set"
+    persisted = False
+
+    def __init__(self, chunk_sets_dir: Optional[str] = None):
+        self.chunk_sets_dir = Path(chunk_sets_dir or os.getenv("PAPER_KB_CHUNK_SETS_DIR") or DEFAULT_CHUNK_SETS_DIR)
+        self._paper_chunks: Dict[str, List[Dict[str, Any]]] = {}
+        self._chunk_index: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        self._papers: Dict[str, Dict[str, Any]] = {}
+
+    def _reconstruct_paper_meta(self, paper_id: str, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        first = chunks[0] if chunks else {}
+        meta = first.get("meta") or {}
+        title = meta.get("title")
+        if not title:
+            hp = first.get("header_path")
+            if isinstance(hp, list) and hp:
+                title = hp[0]
+            elif isinstance(hp, str) and hp.strip():
+                title = hp
+        if not title:
+            title = first.get("source_file") or paper_id
+        preview = ""
+        for c in chunks:
+            t = (c.get("text") or "").strip()
+            if t:
+                preview = t[:240]
+                break
+        return {
+            "paper_id": paper_id,
+            "title": title,
+            "authors": meta.get("authors") or [],
+            "n_chunks": len(chunks),
+            "preview": preview,
+            "source_file": first.get("source_file"),
+            "pipeline_version": meta.get("pipeline_version") or first.get("producer") or first.get("entrypoint"),
+        }
+
+    def load_caches(self) -> None:
+        self._paper_chunks.clear()
+        self._chunk_index.clear()
+        self._papers.clear()
+        if not self.chunk_sets_dir.exists():
+            return
+        for p in sorted(self.chunk_sets_dir.glob("*.chunk_set.json")):
+            try:
+                payload = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                logger.exception("failed reading chunk set file: %s", p)
+                continue
+            for ch in payload.get("chunks", []) or []:
+                rec = dict(ch)
+                rec["producer"] = payload.get("producer")
+                rec["entrypoint"] = payload.get("entrypoint")
+                rec = _ensure_chunk_shape(rec)
+                pid = rec.get("paper_id")
+                cid = rec.get("chunk_id")
+                if not pid or not cid:
+                    continue
+                self._paper_chunks.setdefault(pid, []).append(rec)
+                self._chunk_index[(pid, cid)] = rec
+
+        for pid, chunks in self._paper_chunks.items():
+            chunks.sort(key=lambda c: int(c.get("chunk_index") or 0))
+            self._papers[pid] = self._reconstruct_paper_meta(pid, chunks)
+
+    def list_papers(self) -> List[Dict[str, Any]]:
+        if not self._papers:
+            self.load_caches()
+        return list(self._papers.values())
+
+    def get_paper(self, paper_id: str) -> Dict[str, Any]:
+        if not self._papers:
+            self.load_caches()
+        return self._papers.get(paper_id, {})
+
+    def list_chunks(self, paper_id: str, limit: int = 200, offset: int = 0, q: Optional[str] = None) -> Dict[str, Any]:
+        if not self._paper_chunks:
+            self.load_caches()
+        chunks = list(self._paper_chunks.get(paper_id, []))
+        if q:
+            ql = q.lower()
+            chunks = [c for c in chunks if ql in (c.get("text") or "").lower()]
+        total = len(chunks)
+        return {"paper_id": paper_id, "n": total, "chunks": chunks[offset:offset + limit]}
+
+    def get_chunk(self, paper_id: str, chunk_id: str) -> Optional[Dict[str, Any]]:
+        if not self._chunk_index:
+            self.load_caches()
+        return self._chunk_index.get((paper_id, chunk_id))
+
+    def semantic_search(self, q: str, k: int = 6, paper_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        if not q:
+            return []
+        if not self._paper_chunks:
+            self.load_caches()
+        q_tokens = _WORD_RE.findall(q.lower())
+        candidates = self._paper_chunks.get(paper_id, []) if paper_id else [c for arr in self._paper_chunks.values() for c in arr]
+        hits = []
+        for c in candidates:
+            txt = (c.get("text") or "").lower()
+            tokens = _WORD_RE.findall(txt)
+            if not tokens:
+                continue
+            matches = sum(1 for t in q_tokens if t in tokens)
+            score = matches / (1 + len(tokens))
+            if score > 0:
+                hits.append({"id": c.get("chunk_id"), "text": c.get("text"), "score": score, "meta": c.get("meta", {}), "paper_id": c.get("paper_id")})
+        return sorted(hits, key=lambda x: x.get("score", 0), reverse=True)[:k]
+
+    def counts(self) -> Dict[str, int]:
+        if not self._paper_chunks:
+            self.load_caches()
+        return {"n_papers": len(self._paper_chunks), "n_chunks": sum(len(v) for v in self._paper_chunks.values())}
+
+    def close(self) -> None:
+        return None
+
+    def maybe_persist(self) -> None:
+        return None
 
 
 class JsonlAdapter:
@@ -267,3 +383,13 @@ class JsonlAdapter:
 
     def maybe_persist(self) -> None:
         logger.debug("JsonlAdapter.maybe_persist noop")
+
+
+def create_adapter_from_env() -> StorageAdapter:
+    backend = (os.getenv("STORAGE_BACKEND") or "jsonl").strip().lower()
+    if backend in {"chunk_set", "chunk-set", "chunkset"}:
+        return ChunkSetStorageAdapter()
+    return JsonlAdapter(
+        chunks_dir=os.getenv("PAPER_KB_CHUNKS_DIR"),
+        papers_dir=os.getenv("PAPER_KB_PAPERS_DIR"),
+    )
