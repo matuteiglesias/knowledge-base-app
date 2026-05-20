@@ -84,3 +84,20 @@ def test_chunk_index_and_char_len_are_stabilized_for_weak_callers(tmp_path):
     assert [c["chunk_index"] for c in payload["chunks"]] == [0, 1]
     assert [c["char_len"] for c in payload["chunks"]] == [1, 2]
     assert [c["document_id"] for c in payload["chunks"]] == ["p", "p"]
+
+def test_chunk_set_writer_omits_null_metadata_fields(tmp_path):
+    chunks = [
+        {"chunk_id": "c1", "paper_id": "p1", "text": "hello", "metadata": {}},
+    ]
+    out = write_chunk_set_artifact(
+        chunks,
+        source_items=["a.xml"],
+        run_id="run-3",
+        out_dir=tmp_path,
+        paper_meta={"paper_id": "p1", "title": "T", "source_file": None, "authors": []},
+    )
+    payload = _load(out)
+    c1 = payload["chunks"][0]
+    assert "source_file" not in c1
+    assert "header_path" not in c1
+    assert payload["paper_meta"] == {"paper_id": "p1", "title": "T", "authors": []}

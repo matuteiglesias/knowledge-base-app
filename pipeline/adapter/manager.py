@@ -29,6 +29,7 @@ except Exception:  # lightweight fallback for import smoke tests
 
 from pipeline.adapter.grobid_ingest import generate_teis_from_pdfs
 from pipeline.producer.tei_runner import parse_teis_to_chunks
+from pipeline.corpus import resolve_corpus_paths
 
 logger = logging.getLogger("pipeline.adapter.manager")
 logger.addHandler(logging.StreamHandler())
@@ -40,6 +41,26 @@ def _maybe_ingest_chunks_to_chroma(*args, **kwargs):
     from pipeline.producer.embed_runner import ingest_chunks_to_chroma
 
     return ingest_chunks_to_chroma(*args, **kwargs)
+
+
+
+
+def _resolve_runtime_paths(*, corpus: Optional[str], pdf_dir: Optional[Path], tei_dir: Optional[Path], chunks_dir: Optional[Path], chunk_set_dir: Optional[Path]) -> Dict[str, Path | None]:
+    corpus_paths = None
+    if corpus:
+        corpus_paths = resolve_corpus_paths(corpus).ensure_dirs()
+
+    resolved_pdf_dir = Path(pdf_dir).expanduser().resolve() if pdf_dir else (corpus_paths.pdfs if corpus_paths else None)
+    resolved_tei_dir = Path(tei_dir).expanduser().resolve() if tei_dir else (corpus_paths.xmls if corpus_paths else None)
+    resolved_chunks_dir = Path(chunks_dir).expanduser().resolve() if chunks_dir else (corpus_paths.chunks if corpus_paths else None)
+    resolved_chunk_set_dir = Path(chunk_set_dir).expanduser().resolve() if chunk_set_dir else (corpus_paths.chunk_sets if corpus_paths else None)
+
+    return {
+        "pdf_dir": resolved_pdf_dir,
+        "tei_dir": resolved_tei_dir,
+        "chunks_dir": resolved_chunks_dir,
+        "chunk_set_dir": resolved_chunk_set_dir,
+    }
 
 
 def full_run(
@@ -54,6 +75,7 @@ def full_run(
     grobid_opts: Optional[Dict[str, Any]] = None,
     parse_opts: Optional[Dict[str, Any]] = None,
     ingest_opts: Optional[Dict[str, Any]] = None,
+    corpus: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the bounded paper pipeline.
 
@@ -65,10 +87,19 @@ def full_run(
     parse_opts = parse_opts or {}
     ingest_opts = ingest_opts or {}
 
-    pdf_dir = Path(pdf_dir or PDF_DIR).expanduser().resolve()
-    tei_dir = Path(tei_dir or TEI_DIR).expanduser().resolve()
-    chunks_dir = Path(chunks_dir or CHUNKS_DIR).expanduser().resolve()
+    runtime_paths = _resolve_runtime_paths(
+        corpus=corpus,
+        pdf_dir=pdf_dir or Path(PDF_DIR),
+        tei_dir=tei_dir or Path(TEI_DIR),
+        chunks_dir=chunks_dir or Path(CHUNKS_DIR),
+        chunk_set_dir=parse_opts.get("chunk_set_dir") if isinstance(parse_opts, dict) else None,
+    )
+    pdf_dir = runtime_paths["pdf_dir"]
+    tei_dir = runtime_paths["tei_dir"]
+    chunks_dir = runtime_paths["chunks_dir"]
     chroma_dir = Path(chroma_dir or CHROMA_DIR).expanduser().resolve()
+    if runtime_paths.get("chunk_set_dir") is not None and "chunk_set_dir" not in parse_opts:
+        parse_opts["chunk_set_dir"] = runtime_paths["chunk_set_dir"]
 
     result: Dict[str, Any] = {
         "roles": {
@@ -98,8 +129,9 @@ def _parse_args_and_run() -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     g = sub.add_parser("grobid", help="POST PDFs to GROBID and write TEI files")
-    g.add_argument("pdf_dir")
-    g.add_argument("out_tei_dir")
+    g.add_argument("pdf_dir", nargs="?")
+    g.add_argument("out_tei_dir", nargs="?")
+    g.add_argument("--corpus", default=None)
     g.add_argument("--recursive", action="store_true")
     g.add_argument("--timeout", type=int, default=180)
     g.add_argument("--max-retries", type=int, default=3)
@@ -107,8 +139,9 @@ def _parse_args_and_run() -> None:
     g.add_argument("--force", action="store_true")
 
     pr = sub.add_parser("parse", help="Parse TEIs to legacy chunks and canonical chunk_set artifacts")
-    pr.add_argument("tei_dir")
-    pr.add_argument("chunks_dir")
+    pr.add_argument("tei_dir", nargs="?")
+    pr.add_argument("chunks_dir", nargs="?")
+    pr.add_argument("--corpus", default=None)
     pr.add_argument("--min-len", type=int, default=50)
     pr.add_argument("--dry-run", action="store_true")
     pr.add_argument("--force", action="store_true")
@@ -124,6 +157,7 @@ def _parse_args_and_run() -> None:
     ing.add_argument("--dry-run", action="store_true")
 
     f = sub.add_parser("full-run", help="grobid -> parse -> optional internal Chroma materialization")
+    f.add_argument("--corpus", default=None)
     f.add_argument("--pdf-dir", default=str(PDF_DIR))
     f.add_argument("--tei-dir", default=str(TEI_DIR))
     f.add_argument("--chunks-dir", default=str(CHUNKS_DIR))
@@ -139,9 +173,18 @@ def _parse_args_and_run() -> None:
     args = p.parse_args()
 
     if args.cmd == "grobid":
+        runtime_paths = _resolve_runtime_paths(
+            corpus=args.corpus,
+            pdf_dir=Path(args.pdf_dir).expanduser().resolve() if args.pdf_dir else None,
+            tei_dir=Path(args.out_tei_dir).expanduser().resolve() if args.out_tei_dir else None,
+            chunks_dir=None,
+            chunk_set_dir=None,
+        )
+        if runtime_paths["pdf_dir"] is None or runtime_paths["tei_dir"] is None:
+            raise SystemExit("grobid requires pdf_dir and out_tei_dir, or --corpus")
         res = generate_teis_from_pdfs(
-            Path(args.pdf_dir),
-            Path(args.out_tei_dir),
+            runtime_paths["pdf_dir"],
+            runtime_paths["tei_dir"],
             recursive=args.recursive,
             timeout=args.timeout,
             max_retries=args.max_retries,
@@ -149,14 +192,23 @@ def _parse_args_and_run() -> None:
             force=args.force,
         )
     elif args.cmd == "parse":
+        runtime_paths = _resolve_runtime_paths(
+            corpus=args.corpus,
+            pdf_dir=None,
+            tei_dir=Path(args.tei_dir).expanduser().resolve() if args.tei_dir else None,
+            chunks_dir=Path(args.chunks_dir).expanduser().resolve() if args.chunks_dir else None,
+            chunk_set_dir=Path(args.chunk_set_dir).expanduser().resolve() if args.chunk_set_dir else None,
+        )
+        if runtime_paths["tei_dir"] is None or runtime_paths["chunks_dir"] is None:
+            raise SystemExit("parse requires tei_dir and chunks_dir, or --corpus")
         res = parse_teis_to_chunks(
-            Path(args.tei_dir),
-            Path(args.chunks_dir),
+            runtime_paths["tei_dir"],
+            runtime_paths["chunks_dir"],
             min_len=args.min_len,
             dry_run=args.dry_run,
             force=args.force,
             emit_chunk_set_artifact=not args.no_chunk_set,
-            chunk_set_dir=Path(args.chunk_set_dir).expanduser().resolve() if args.chunk_set_dir else None,
+            chunk_set_dir=runtime_paths["chunk_set_dir"],
         )
     elif args.cmd == "ingest":
         res = _maybe_ingest_chunks_to_chroma(
@@ -184,6 +236,7 @@ def _parse_args_and_run() -> None:
                 "chunk_set_dir": Path(args.chunk_set_dir).expanduser().resolve() if args.chunk_set_dir else None,
             },
             ingest_opts={"batch_size": 256, "force": args.force, "dry_run": args.dry_run},
+            corpus=args.corpus,
         )
 
     print(json.dumps(res, ensure_ascii=False, indent=2))

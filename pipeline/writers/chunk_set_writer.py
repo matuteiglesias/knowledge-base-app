@@ -49,6 +49,10 @@ def _first_present(mapping: Dict[str, Any], keys: Sequence[str], default: Any = 
     return default
 
 
+def _drop_none(d: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in d.items() if v is not None}
+
+
 def _chunk_to_record(
     chunk: Any,
     *,
@@ -83,7 +87,7 @@ def _chunk_to_record(
 
     text_str = str(text)
 
-    return {
+    return _drop_none({
         "chunk_id": str(chunk_id),
         "paper_id": str(paper_id) if paper_id else None,
         "document_id": str(document_id) if document_id else (str(paper_id) if paper_id else None),
@@ -93,7 +97,7 @@ def _chunk_to_record(
         "source_file": str(source_file) if source_file else None,
         "header_path": header_path,
         "metadata": clean_meta,
-    }
+    })
 
 
 def write_json_atomic(path: Path, payload: Dict[str, Any]) -> None:
@@ -145,6 +149,6 @@ def write_chunk_set_artifact(
         "chunk_count": len(records),
     }
     if paper_meta is not None:
-        payload["paper_meta"] = dict(paper_meta)
+        payload["paper_meta"] = _drop_none(dict(paper_meta))
     write_json_atomic(out_path, payload)
     return out_path
