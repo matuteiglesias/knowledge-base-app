@@ -42,6 +42,9 @@ from backend.app.schemas import (
     SummaryResult,
     SearchResponse,
     SearchHit,
+    CorpusInfoResponse,
+    CorpusHealthResponse,
+    SearchV1Response,
     canonical_to_api_chunk,
 )
 
@@ -203,44 +206,82 @@ def papers_health(storage: StorageAdapter = Depends(get_storage)):
 # -------------------------------------------------------------------
 # API endpoints (adapter-driven, minimal logic)
 # -------------------------------------------------------------------
+
+
+@app.get("/api/corpus", response_model=CorpusInfoResponse, tags=["health"], summary="Get active corpus identity and runtime config")
+def api_corpus(storage: StorageAdapter = Depends(get_storage)):
+    corpus_name = os.getenv("PAPER_KB_CORPUS")
+    chunk_sets_dir = os.getenv("PAPER_KB_CHUNK_SETS_DIR")
+    if not corpus_name and chunk_sets_dir:
+        parts = Path(chunk_sets_dir).parts
+        if "corpora" in parts:
+            try:
+                corpus_name = parts[parts.index("corpora") + 1]
+            except Exception:
+                pass
+    return CorpusInfoResponse(
+        corpus_name=corpus_name,
+        storage_backend=getattr(storage, "backend_name", "unknown"),
+        chunk_sets_dir=chunk_sets_dir,
+        cache_ready=bool(getattr(app.state, "cache_ready", False)),
+        loaded_at=getattr(storage, "loaded_at", None),
+    )
+
+
+@app.get("/api/corpus/health", response_model=CorpusHealthResponse, tags=["health"], summary="Get corpus diagnostics")
+def api_corpus_health(storage: StorageAdapter = Depends(get_storage)):
+    counts = {}
+    if hasattr(storage, "counts"):
+        counts = storage.counts() or {}
+    diags = storage.diagnostics() if hasattr(storage, "diagnostics") else {}
+    warnings = list(diags.get("warnings") or [])
+    if counts.get("n_invalid_artifacts", 0) > 0:
+        warnings.append("invalid artifacts detected")
+    status = "ok" if not warnings else "warning"
+    return CorpusHealthResponse(
+        status=status,
+        n_papers=int(counts.get("n_papers", 0)),
+        n_chunks=int(counts.get("n_chunks", 0)),
+        n_artifacts=int(counts.get("n_artifacts", 0)),
+        n_invalid_artifacts=int(counts.get("n_invalid_artifacts", 0)),
+        n_skipped_chunks=int(counts.get("n_skipped_chunks", 0)),
+        dedupe_collisions=int(counts.get("dedupe_collisions", 0)),
+        warnings=warnings,
+    )
+
 @app.get("/api/papers", response_model=PapersList, tags=["papers"], summary="List papers (cache -> storage)")
-def api_list_papers(storage: StorageAdapter = Depends(get_storage)):
+def api_list_papers(q: str = "", year: Optional[int] = None, venue: str = "", tag: str = "", status: str = "", offset: int = 0, limit: int = 200, storage: StorageAdapter = Depends(get_storage)):
     """
     Returns the canonical list of papers. Delegate to services.list_papers(storage).
     The service will handle caches and normalization.
     """
     try:
         papers = services.list_papers(storage)
-        return PapersList(papers=papers)
+        # v1 filter placeholders (q/year/venue/tag/status); currently no-op if not representable in corpus metadata.
+        sliced = papers[offset: offset + limit]
+        return PapersList(papers=sliced)
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("api_list_papers failed")
         raise HTTPException(status_code=500, detail="list papers failed")
 
-@app.get("/api/papers/{paper_id}", response_model=PaperChunksResponse, tags=["papers","chunks"],
-         summary="Get paginated chunks for a paper (delegates to services.get_paper_chunks)")
-def api_get_paper(paper_id: str, offset: int = 0, limit: int = 200, storage: StorageAdapter = Depends(get_storage)):
+@app.get("/api/papers/{paper_id}", response_model=PaperMeta, tags=["papers"],
+         summary="Get paper metadata/details")
+def api_get_paper(paper_id: str, storage: StorageAdapter = Depends(get_storage)):
     """
     Request a page of canonical chunks for a paper. Delegates to services.get_paper_chunks(storage, ...).
     This handler keeps the API contract stable.
     """
-    # Basic validation
-    if limit <= 0 or limit > 1000:
-        raise HTTPException(status_code=400, detail="limit must be between 1 and 1000")
-    if offset < 0:
-        raise HTTPException(status_code=400, detail="offset must be >= 0")
-
     try:
-        resp = services.get_paper_chunks(storage, paper_id=paper_id, offset=offset, limit=limit)
-        return resp
+        return services.get_paper_detail(storage, paper_id=paper_id)
     except services.NotFoundError:
         raise HTTPException(status_code=404, detail="paper not found")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("api_get_paper failed for %s", paper_id)
-        raise HTTPException(status_code=500, detail="get paper chunks failed")
+        raise HTTPException(status_code=500, detail="get paper detail failed")
 
 @app.get("/api/papers/{paper_id}/chunks/{chunk_id}", response_model=ChunkResponse, tags=["papers","chunks"],
          summary="Get single chunk")
@@ -269,6 +310,16 @@ def api_get_filtered_chunks(paper_id: str, q: str = "", offset: int = 0, limit: 
     except Exception:
         logger.exception("api_get_filtered_chunks failed for %s", paper_id)
         raise HTTPException(status_code=500, detail="filtered chunks failed")
+
+
+
+@app.post("/api/search", response_model=SearchV1Response, tags=["search"], summary="Lexical search")
+def api_search_v1(req: SearchRequest, storage: StorageAdapter = Depends(get_storage)):
+    q = (req.q or "").strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="empty query")
+    hits = services.search(storage, q=q, k=int(req.k or 6), paper_id=req.paper_id)
+    return SearchV1Response(capability="lexical", query=q, k=int(req.k or 6), hits=hits.hits)
 
 # Dev seed route (keeps previous behaviour)
 @app.post("/_dev/seed", tags=["dev"])

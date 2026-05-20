@@ -87,6 +87,12 @@ class ChunkSetStorageAdapter(StorageAdapter):
         self._paper_chunks: Dict[str, List[Dict[str, Any]]] = {}
         self._chunk_index: Dict[Tuple[str, str], Dict[str, Any]] = {}
         self._papers: Dict[str, Dict[str, Any]] = {}
+        self.loaded_at: Optional[float] = None
+        self.n_artifacts: int = 0
+        self.n_invalid_artifacts: int = 0
+        self.n_skipped_chunks: int = 0
+        self.dedupe_collisions: int = 0
+        self.warnings: List[str] = []
 
     def _reconstruct_paper_meta(self, paper_id: str, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
         first = chunks[0] if chunks else {}
@@ -149,7 +155,14 @@ class ChunkSetStorageAdapter(StorageAdapter):
         self._paper_chunks.clear()
         self._chunk_index.clear()
         self._papers.clear()
+        self.loaded_at = None
+        self.n_artifacts = 0
+        self.n_invalid_artifacts = 0
+        self.n_skipped_chunks = 0
+        self.dedupe_collisions = 0
+        self.warnings = []
         if not self.chunk_sets_dir.exists():
+            self.warnings.append(f"chunk_sets_dir does not exist: {self.chunk_sets_dir}")
             return
 
         # Deterministic artifact precedence:
@@ -160,6 +173,7 @@ class ChunkSetStorageAdapter(StorageAdapter):
             self.chunk_sets_dir.glob("*.chunk_set.json"),
             key=lambda p: (p.stat().st_mtime, p.name),
         )
+        self.n_artifacts = len(artifact_paths)
 
         # Per-paper dedup index keyed by chunk_id to avoid duplicate chunks when
         # the same paper/chunk appears in multiple artifacts.
@@ -171,6 +185,8 @@ class ChunkSetStorageAdapter(StorageAdapter):
                 payload = json.loads(p.read_text(encoding="utf-8"))
             except Exception:
                 logger.exception("failed reading chunk set file: %s", p)
+                self.n_invalid_artifacts += 1
+                self.warnings.append(f"invalid artifact: {p.name}")
                 continue
             payload_paper_meta = payload.get("paper_meta")
             if isinstance(payload_paper_meta, dict):
@@ -185,9 +201,12 @@ class ChunkSetStorageAdapter(StorageAdapter):
                 pid = rec.get("paper_id")
                 cid = rec.get("chunk_id")
                 if not pid or not cid:
+                    self.n_skipped_chunks += 1
                     continue
 
                 bucket = per_paper_by_chunk_id.setdefault(pid, {})
+                if cid in bucket:
+                    self.dedupe_collisions += 1
                 bucket[cid] = rec
                 self._chunk_index[(pid, cid)] = rec
 
@@ -200,6 +219,8 @@ class ChunkSetStorageAdapter(StorageAdapter):
                 chunks,
                 paper_meta=paper_meta_by_paper_id.get(pid),
             )
+        import time
+        self.loaded_at = time.time()
 
     def list_papers(self) -> List[Dict[str, Any]]:
         if not self._papers:
@@ -248,7 +269,10 @@ class ChunkSetStorageAdapter(StorageAdapter):
     def counts(self) -> Dict[str, int]:
         if not self._paper_chunks:
             self.load_caches()
-        return {"n_papers": len(self._paper_chunks), "n_chunks": sum(len(v) for v in self._paper_chunks.values())}
+        return {"n_papers": len(self._paper_chunks), "n_chunks": sum(len(v) for v in self._paper_chunks.values()), "n_artifacts": self.n_artifacts, "n_invalid_artifacts": self.n_invalid_artifacts, "n_skipped_chunks": self.n_skipped_chunks, "dedupe_collisions": self.dedupe_collisions}
+
+    def diagnostics(self) -> Dict[str, Any]:
+        return {"loaded_at": self.loaded_at, "warnings": list(self.warnings), "n_artifacts": self.n_artifacts, "n_invalid_artifacts": self.n_invalid_artifacts, "n_skipped_chunks": self.n_skipped_chunks, "dedupe_collisions": self.dedupe_collisions}
 
     def close(self) -> None:
         return None

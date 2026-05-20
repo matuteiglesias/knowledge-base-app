@@ -1,43 +1,75 @@
+SHELL := /bin/bash
 
-# Auto-generated stub Makefile.
-# Purpose: provide a stable interface for portfolio governance.
-# Replace placeholder targets with real commands when ready.
+CORPUS ?= tesislcd
+PORT ?= 9000
+MAX_FILES ?=
+MIN_LEN ?= 50
+CHUNK_SET_DIR ?=
 
+DOCTOR_CMD = python3 -m pipeline.adapter.manager doctor --corpus $(CORPUS)
+GROBID_CMD = python3 -m pipeline.adapter.manager grobid --corpus $(CORPUS) --recursive $(if $(MAX_FILES),--max-files $(MAX_FILES),)
+PARSE_CMD = python3 -m pipeline.adapter.manager parse --corpus $(CORPUS) --min-len $(MIN_LEN) $(if $(CHUNK_SET_DIR),--chunk-set-dir $(CHUNK_SET_DIR),)
+VALIDATE_CMD = python3 -m pipeline.adapter.manager doctor --corpus $(CORPUS) --strict --json
+EXPORT_REVIEW_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
+API_CORPUS_CMD = PAPER_KB_CORPUS=$(CORPUS) PAPER_KB_CHUNK_SETS_DIR=corpora/$(CORPUS)/chunk_sets STORAGE_BACKEND=chunk_set uvicorn backend.app.main:app --reload --port $(PORT)
 
-PYTHONPATH=/home/matias/Documents/KB.
-
-
-PROJECT := $(notdir $(CURDIR))
-
-.PHONY: help smoke smoke-chunk-set api-chunk-set run run_all
+.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate api-corpus export-review frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
 
 help:
-	@echo "Project: $(PROJECT)"
+	@echo "Operator targets (run from repo root):"
+	@echo "  make corpus-doctor CORPUS=tesislcd"
+	@echo "  make corpus-grobid CORPUS=tesislcd MAX_FILES=2"
+	@echo "  make corpus-parse CORPUS=tesislcd"
+	@echo "  make corpus-validate CORPUS=tesislcd"
+	@echo "  make api-corpus CORPUS=tesislcd PORT=9000"
+	@echo "  make export-review CORPUS=tesislcd"
+	@echo "  make frontend-dev"
+	@echo "  make kill-port PORT=9000"
 	@echo ""
-	@echo "Targets:"
-	@echo "  make smoke    - cheap, offline, bounded checks (placeholder by default)"
-	@echo "  make run_all  - full run pipeline (placeholder by default)"
-	@echo "  make run      - alias for run_all"
+	@echo "Legacy placeholders retained as explicit legacy-* targets."
 
-smoke:
-	@echo "[SMOKE][$(PROJECT)] not implemented"
-	@echo "Define a minimal, offline, fixture-driven smoke check."
-	@exit 2
+corpus-doctor:
+	echo $(DOCTOR_CMD)
+	$(DOCTOR_CMD)
 
-run_all:
-	@echo "[RUN_ALL][$(PROJECT)] not implemented"
-	@echo "Define the full run (may require network, secrets, longer compute)."
-	@exit 2
+corpus-grobid:
+	echo $(GROBID_CMD)
+	$(GROBID_CMD)
 
-run: run_all
+corpus-parse:
+	echo $(PARSE_CMD)
+	$(PARSE_CMD)
 
+corpus-validate:
+	echo $(VALIDATE_CMD)
+	$(VALIDATE_CMD)
 
+api-corpus:
+	python3 -c "import socket; s=socket.socket(); s.settimeout(0.2); busy=(s.connect_ex(('127.0.0.1', int('$(PORT)')))==0); s.close(); import sys; sys.exit(1 if busy else 0)" || { echo "Port $(PORT) is occupied. Run: make kill-port PORT=$(PORT)"; exit 2; }
+	echo $(API_CORPUS_CMD)
+	$(API_CORPUS_CMD)
 
+export-review:
+	echo $(EXPORT_REVIEW_CMD)
+	$(EXPORT_REVIEW_CMD)
 
-api-chunk-set:
-	PAPER_KB_CHUNK_SETS_DIR=$${PAPER_KB_CHUNK_SETS_DIR:-artifacts/chunk_sets} \
-	STORAGE_BACKEND=chunk_set \
-	uvicorn backend.app.main:app --reload --port 9000
+frontend-dev:
+	echo "cd frontend && NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev"
+	cd frontend && NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev
 
-smoke-chunk-set:
-	BASE_URL=$${BASE_URL:-http://127.0.0.1:9000} ./scripts/poke_api_chunk_set.sh
+kill-port:
+	echo "Killing listeners on port $(PORT)"
+	pids=$$(lsof -ti tcp:$(PORT) 2>/dev/null || true); \
+	if [ -z "$$pids" ]; then echo "No process is listening on port $(PORT)"; exit 0; fi; \
+	echo "kill $$pids"; \
+	kill $$pids
+
+legacy-smoke:
+	echo "[LEGACY] smoke placeholder removed; use corpus-doctor/corpus-validate instead."
+	exit 2
+
+legacy-run-all:
+	echo "[LEGACY] run_all placeholder removed; use corpus-grobid + corpus-parse + api-corpus." 
+	exit 2
+
+legacy-run: legacy-run-all

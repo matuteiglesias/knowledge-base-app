@@ -21,6 +21,9 @@ export type PaperMeta = {
   createdAt?: string | null;
   pipelineVersion?: string | null;
   embedModel?: string | null;
+  year?: number | null;
+  venue?: string | null;
+  status?: string | null;
 };
 
 export type Chunk = {
@@ -57,6 +60,9 @@ export function normalizePaperMeta(r: RawPaperMeta): PaperMeta {
     createdAt: (r as any).created_at ?? null,
     pipelineVersion: (r as any).pipeline_version ?? null,
     embedModel: (r as any).embed_model ?? null,
+    year: (r as any).year ?? null,
+    venue: (r as any).venue ?? null,
+    status: (r as any).status ?? null,
   };
 }
 
