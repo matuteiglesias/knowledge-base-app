@@ -27,3 +27,33 @@ export type CorpusHealthResponse = {
   dedupe_collisions?: number;
   warnings: string[];
 };
+
+
+export type PaperSummary = {
+  paper_id: string;
+  title: string;
+  summary_version: number;
+  generated_at: string;
+  provider: string;
+  model: string;
+  source: {
+    corpus: string;
+    chunk_set_dir: string;
+    n_chunks_total: number;
+    n_chunks_selected: number;
+    selected_chunk_ids: string[];
+  };
+  status: string;
+  one_line: string;
+  research_question: string;
+  data: string;
+  method: string;
+  main_contribution: string;
+  limitations: string;
+  relevance_to_thesis: string;
+  suggested_tags: { method_tags: string[]; data_tags: string[] };
+  confidence: "low" | "medium" | "high";
+  warnings: string[];
+};
+
+export type SummaryGenerateRequest = { provider?: "mock" | "agent-framework"; force?: boolean };

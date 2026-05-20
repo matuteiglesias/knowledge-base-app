@@ -12,6 +12,7 @@ Usage:
 """
 from __future__ import annotations
 import os
+import asyncio
 import sys
 import time
 import json
@@ -45,11 +46,15 @@ from backend.app.schemas import (
     CorpusInfoResponse,
     CorpusHealthResponse,
     SearchV1Response,
+    SummaryGenerateRequest,
     canonical_to_api_chunk,
 )
 
 # Services (business logic) - these should be adapted to accept a storage adapter
 from backend.app import services
+from backend.exports.generate_summaries import generate_summary_for_paper
+from backend.exports.summary_artifacts import summary_path
+from pipeline.corpus import resolve_corpus_paths
 
 # FS normalizer kept authoritative
 from backend.app.chunks_fs import normalize_chunk
@@ -311,6 +316,42 @@ def api_get_filtered_chunks(paper_id: str, q: str = "", offset: int = 0, limit: 
         logger.exception("api_get_filtered_chunks failed for %s", paper_id)
         raise HTTPException(status_code=500, detail="filtered chunks failed")
 
+
+
+@app.get("/api/papers/{paper_id}/summary", tags=["papers","summaries"], summary="Get saved paper summary")
+def api_get_paper_summary(paper_id: str, storage: StorageAdapter = Depends(get_storage)):
+    try:
+        services.get_paper_detail(storage, paper_id=paper_id)
+    except services.NotFoundError:
+        raise HTTPException(status_code=404, detail="paper not found")
+
+    corpus_name = os.getenv("PAPER_KB_CORPUS", "default")
+    paths = resolve_corpus_paths(corpus_name).ensure_dirs()
+    p = summary_path(paths.root / "summaries", paper_id)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="summary not found")
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+@app.post("/api/papers/{paper_id}/summary:generate", tags=["papers","summaries"], summary="Generate or return paper summary")
+def api_generate_paper_summary(paper_id: str, req: SummaryGenerateRequest, storage: StorageAdapter = Depends(get_storage)):
+    try:
+        services.get_paper_detail(storage, paper_id=paper_id)
+    except services.NotFoundError:
+        raise HTTPException(status_code=404, detail="paper not found")
+
+    corpus_name = os.getenv("PAPER_KB_CORPUS", "default")
+    try:
+        summary, _written = asyncio.run(
+            generate_summary_for_paper(corpus=corpus_name, paper_id=paper_id, provider_name=req.provider, force=bool(req.force))
+        )
+        return summary
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="paper not found")
 
 
 @app.post("/api/search", response_model=SearchV1Response, tags=["search"], summary="Lexical search")
