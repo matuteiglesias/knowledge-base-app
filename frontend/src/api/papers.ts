@@ -5,8 +5,10 @@ import type {
   PaperMeta,
   CorpusInfoResponse,
   CorpusHealthResponse,
+  PaperSummary,
+  SummaryGenerateRequest,
 } from "@/api/types";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 
 async function typedGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   try {
@@ -44,4 +46,17 @@ export async function fetchPaperChunks(
 ): Promise<PaperChunksResponse> {
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
   return typedGet<PaperChunksResponse>(`/api/papers/${encodeURIComponent(paperId)}/chunks?${params}`, signal);
+}
+
+
+export async function fetchPaperSummary(paperId: string, signal?: AbortSignal): Promise<PaperSummary> {
+  return typedGet<PaperSummary>(`/api/papers/${encodeURIComponent(paperId)}/summary`, signal);
+}
+
+export async function generatePaperSummary(
+  paperId: string,
+  body: SummaryGenerateRequest = { provider: "mock", force: false },
+  signal?: AbortSignal
+): Promise<PaperSummary> {
+  return apiPost<PaperSummary>(`/api/papers/${encodeURIComponent(paperId)}/summary:generate`, body, { signal });
 }

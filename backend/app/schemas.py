@@ -136,6 +136,12 @@ class Topic(BaseModel):
     top_snippets: Optional[List[Dict[str, Any]]] = None  # [{chunk_id, paper_id, text}]
 
 
+
+class SummaryGenerateRequest(BaseModel):
+    provider: str = "mock"
+    force: bool = False
+
+
 class SummaryTask(BaseModel):
     task_id: str
     status: str  # queued|in_progress|done|failed
