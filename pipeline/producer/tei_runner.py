@@ -257,6 +257,12 @@ def parse_teis_to_chunks(
                     producer="paper-kb",
                     entrypoint="paper_tei_parse",
                     fallback_source_file=tei_path.name,
+                    paper_meta={
+                        "paper_id": paper_id,
+                        "title": title,
+                        "authors": parsed.get("authors") if isinstance(parsed.get("authors"), list) else [],
+                        "source_file": tei_path.name,
+                    },
                 )
                 summary["n_chunk_set_artifacts"] += 1
                 summary["chunk_set_artifacts"].append(str(chunk_set_path))

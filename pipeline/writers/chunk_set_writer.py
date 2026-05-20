@@ -122,6 +122,7 @@ def write_chunk_set_artifact(
     entrypoint: str = "paper_tei_parse",
     schema_version: int = 1,
     fallback_source_file: Optional[str] = None,
+    paper_meta: Optional[Dict[str, Any]] = None,
 ) -> Path:
     """Write a Chunk Bus-compatible chunk_set artifact and return its path."""
     out_dir = Path(out_dir) if out_dir is not None else default_chunk_sets_dir()
@@ -143,5 +144,7 @@ def write_chunk_set_artifact(
         "chunks": records,
         "chunk_count": len(records),
     }
+    if paper_meta is not None:
+        payload["paper_meta"] = dict(paper_meta)
     write_json_atomic(out_path, payload)
     return out_path

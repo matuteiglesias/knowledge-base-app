@@ -71,6 +71,7 @@ def _ensure_chunk_shape(rec: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         out["char_len"] = len(out["text"] or "")
     out["header_path"] = rec.get("header_path") or (rec.get("meta") or {}).get("header_path")
+    out["source_file"] = rec.get("source_file") or (rec.get("meta") or {}).get("source_file")
     out["pages"] = _normalize_pages(rec.get("pages") or (rec.get("meta") or {}).get("pages"))
     out["meta"] = rec.get("meta") or rec.get("metadata") or {}
     out["_raw"] = rec
@@ -115,18 +116,67 @@ class ChunkSetStorageAdapter(StorageAdapter):
             "pipeline_version": meta.get("pipeline_version") or first.get("producer") or first.get("entrypoint"),
         }
 
+    def _reconstruct_paper_meta_with_payload(
+        self,
+        paper_id: str,
+        chunks: List[Dict[str, Any]],
+        paper_meta: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        base = self._reconstruct_paper_meta(paper_id, chunks)
+        pm = paper_meta if isinstance(paper_meta, dict) else {}
+
+        title = pm.get("title")
+        if isinstance(title, str) and title.strip():
+            base["title"] = title.strip()
+
+        authors = pm.get("authors")
+        if isinstance(authors, list):
+            base["authors"] = authors
+        elif base.get("authors") is None:
+            base["authors"] = []
+        elif not isinstance(base.get("authors"), list):
+            base["authors"] = []
+
+        source_file = pm.get("source_file")
+        if isinstance(source_file, str) and source_file.strip():
+            base["source_file"] = source_file.strip()
+
+        if not isinstance(base.get("authors"), list):
+            base["authors"] = []
+        return base
+
     def load_caches(self) -> None:
         self._paper_chunks.clear()
         self._chunk_index.clear()
         self._papers.clear()
         if not self.chunk_sets_dir.exists():
             return
-        for p in sorted(self.chunk_sets_dir.glob("*.chunk_set.json")):
+
+        # Deterministic artifact precedence:
+        # - newer mtime wins
+        # - filename breaks ties
+        # We load oldest -> newest so later records overwrite earlier duplicates.
+        artifact_paths = sorted(
+            self.chunk_sets_dir.glob("*.chunk_set.json"),
+            key=lambda p: (p.stat().st_mtime, p.name),
+        )
+
+        # Per-paper dedup index keyed by chunk_id to avoid duplicate chunks when
+        # the same paper/chunk appears in multiple artifacts.
+        per_paper_by_chunk_id: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        paper_meta_by_paper_id: Dict[str, Dict[str, Any]] = {}
+
+        for p in artifact_paths:
             try:
                 payload = json.loads(p.read_text(encoding="utf-8"))
             except Exception:
                 logger.exception("failed reading chunk set file: %s", p)
                 continue
+            payload_paper_meta = payload.get("paper_meta")
+            if isinstance(payload_paper_meta, dict):
+                payload_paper_id = payload_paper_meta.get("paper_id")
+                if isinstance(payload_paper_id, str) and payload_paper_id.strip():
+                    paper_meta_by_paper_id[payload_paper_id] = dict(payload_paper_meta)
             for ch in payload.get("chunks", []) or []:
                 rec = dict(ch)
                 rec["producer"] = payload.get("producer")
@@ -136,12 +186,20 @@ class ChunkSetStorageAdapter(StorageAdapter):
                 cid = rec.get("chunk_id")
                 if not pid or not cid:
                     continue
-                self._paper_chunks.setdefault(pid, []).append(rec)
+
+                bucket = per_paper_by_chunk_id.setdefault(pid, {})
+                bucket[cid] = rec
                 self._chunk_index[(pid, cid)] = rec
 
-        for pid, chunks in self._paper_chunks.items():
+        for pid, by_chunk_id in per_paper_by_chunk_id.items():
+            chunks = list(by_chunk_id.values())
             chunks.sort(key=lambda c: int(c.get("chunk_index") or 0))
-            self._papers[pid] = self._reconstruct_paper_meta(pid, chunks)
+            self._paper_chunks[pid] = chunks
+            self._papers[pid] = self._reconstruct_paper_meta_with_payload(
+                pid,
+                chunks,
+                paper_meta=paper_meta_by_paper_id.get(pid),
+            )
 
     def list_papers(self) -> List[Dict[str, Any]]:
         if not self._papers:
