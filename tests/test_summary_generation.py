@@ -75,3 +75,55 @@ def test_summary_idempotency_and_force(tmp_path):
     assert required_keys.issubset(set(artifact.keys()))
     assert artifact["summary_version"] == 1
     assert artifact["source"]["corpus"] == "demo_idem"
+
+
+def test_hierarchical_mode_writes_intermediate_and_run_record(tmp_path):
+    paths = resolve_corpus_paths("demo_hier").ensure_dirs()
+    import shutil
+    shutil.rmtree(paths.root, ignore_errors=True)
+    paths = resolve_corpus_paths("demo_hier").ensure_dirs()
+    sets = paths.chunk_sets
+
+    payload = {
+        "artifact_kind": "chunk_set",
+        "paper_meta": {"paper_id": "p2", "title": "Paper 2"},
+        "chunks": [
+            {"chunk_id": "p2_c0", "paper_id": "p2", "text": "intro text", "chunk_index": 0, "char_len": 10, "header_path": ["Introduction"]},
+            {"chunk_id": "p2_c1", "paper_id": "p2", "text": "method text", "chunk_index": 1, "char_len": 11, "header_path": ["Method"]},
+        ],
+    }
+    (sets / "a.chunk_set.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    out_path, stats = asyncio.run(generate_summaries("demo_hier", "mock", limit=1, mode="hierarchical", force=True))
+    assert out_path.exists()
+    assert stats.written == 1
+    assert stats.n_section_calls >= 1
+    assert stats.n_synthesis_calls == 1
+    assert stats.provider_calls == stats.n_section_calls + stats.n_synthesis_calls
+
+    run_dir = out_path.parents[1]
+    inter = run_dir / "intermediate" / "p2.section_summaries.jsonl"
+    assert inter.exists()
+    assert inter.read_text(encoding="utf-8").strip()
+
+    record = json.loads((run_dir / "run_record.json").read_text(encoding="utf-8"))
+    assert record["mode"] == "hierarchical"
+    assert record["n_section_calls"] == stats.n_section_calls
+    assert record["n_synthesis_calls"] == stats.n_synthesis_calls
+    assert record["provider_calls_total"] == stats.provider_calls
+
+
+def test_hierarchical_idempotency_skips_when_final_exists(tmp_path):
+    paths = resolve_corpus_paths("demo_hier_idem").ensure_dirs()
+    import shutil
+    shutil.rmtree(paths.root, ignore_errors=True)
+    paths = resolve_corpus_paths("demo_hier_idem").ensure_dirs()
+    sets = paths.chunk_sets
+    _write_chunk_set(sets / "a.chunk_set.json", "p3", "Paper 3", ["x", "y", "z"])
+
+    _, stats1 = asyncio.run(generate_summaries("demo_hier_idem", "mock", limit=1, mode="hierarchical", force=True))
+    assert stats1.written == 1
+    _, stats2 = asyncio.run(generate_summaries("demo_hier_idem", "mock", limit=1, mode="hierarchical", force=False))
+    assert stats2.written == 0
+    assert stats2.skipped_existing == 1
+    assert stats2.provider_calls == 0
