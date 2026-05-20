@@ -25,7 +25,7 @@ export default function ChunksCard({ paperId }: { paperId?: string | null }) {
   return (
     <Card>
       <CardHeader style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <CardTitle>Chunks for {data?.paperId ?? paperId}</CardTitle>
+        <CardTitle>Chunks</CardTitle>
         <div>
           <Button size="sm" onClick={() => reload()} disabled={loading}>
             {loading ? "..." : "Reload"}

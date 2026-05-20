@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +28,7 @@ def build_summary_artifact(*, paper_id: str, title: str, provider: str, model: s
         "paper_id": paper_id,
         "title": title or "",
         "summary_version": SUMMARY_VERSION,
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "provider": provider,
         "model": model or "",
         "source": {
