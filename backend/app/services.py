@@ -451,3 +451,24 @@ def health(storage) -> Dict[str, Any]:
     except Exception:
         logger.exception("failed getting storage counts")
     return info
+
+
+def get_paper_detail(storage: StorageAdapter, paper_id: str) -> PaperMeta:
+    paper_id = (paper_id or '').strip()
+    if not paper_id:
+        raise NotFoundError('paper not found')
+
+    try:
+        if hasattr(storage, 'get_paper'):
+            raw = storage.get_paper(paper_id) or {}
+            pm = _normalize_paper_meta(raw)
+            if pm is not None:
+                return pm
+    except Exception:
+        logger.exception('storage.get_paper failed for %s', paper_id)
+
+    for p in list_papers(storage, prefer_cache=False):
+        if p.paper_id == paper_id:
+            return p
+
+    raise NotFoundError('paper not found')

@@ -1,54 +1,39 @@
-// frontend/src/api/papers.ts
-import type { PapersList, PaperChunksResponse, HTTPValidationError } from "@/api/types";
+import type {
+  PapersList,
+  PaperChunksResponse,
+  HTTPValidationError,
+  PaperMeta,
+  CorpusInfoResponse,
+  CorpusHealthResponse,
+} from "@/api/types";
+import { apiGet } from "@/lib/api";
 
-
-// frontend/src/api/config.ts
-export const API_BASE =
-  // prefer runtime env variable; fallback to relative path
-  (typeof process !== "undefined" && (process.env.NEXT_PUBLIC_API_BASE as string)) ||
-  "";
-
-
-
-/** Parse JSON safely (returns null on parse error). */
-async function parseJsonSafe(res: Response): Promise<any | null> {
+async function typedGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   try {
-    return await res.json();
-  } catch {
-    return null;
+    return await apiGet<T>(path, { signal });
+  } catch (err: any) {
+    if (err?.status === 422) {
+      const ve = (err?.body || {}) as HTTPValidationError;
+      (err as any).validation = ve;
+    }
+    throw err;
   }
 }
 
-// fetchPaperChunks
+export async function fetchCorpusInfo(signal?: AbortSignal): Promise<CorpusInfoResponse> {
+  return typedGet<CorpusInfoResponse>("/api/corpus", signal);
+}
 
-/** low-level typed fetch that returns structured errors for the caller */
-async function typedFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${path}`;
-  const res = await fetch(url, init);
-
-  if (!res.ok) {
-    const parsed = await parseJsonSafe(res);
-    if (res.status === 422 && parsed) {
-      const ve = parsed as HTTPValidationError;
-      const err = new Error("Validation error");
-      (err as any).status = 422;
-      (err as any).validation = ve;
-      throw err;
-    }
-    const bodyText = parsed ? JSON.stringify(parsed) : await res.text().catch(() => "");
-    const err = new Error(`HTTP ${res.status} ${res.statusText}: ${bodyText}`);
-    (err as any).status = res.status;
-    (err as any).body = parsed;
-    throw err;
-  }
-
-  const body = await parseJsonSafe(res);
-  if (body === null) throw new Error("Expected JSON response but got non-JSON body");
-  return body as T;
+export async function fetchCorpusHealth(signal?: AbortSignal): Promise<CorpusHealthResponse> {
+  return typedGet<CorpusHealthResponse>("/api/corpus/health", signal);
 }
 
 export async function fetchPapers(signal?: AbortSignal): Promise<PapersList> {
-  return typedFetch<PapersList>(`${API_BASE}/api/papers`, { signal });
+  return typedGet<PapersList>("/api/papers", signal);
+}
+
+export async function fetchPaper(paperId: string, signal?: AbortSignal): Promise<PaperMeta> {
+  return typedGet<PaperMeta>(`/api/papers/${encodeURIComponent(paperId)}`, signal);
 }
 
 export async function fetchPaperChunks(
@@ -58,7 +43,5 @@ export async function fetchPaperChunks(
   signal?: AbortSignal
 ): Promise<PaperChunksResponse> {
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
-  return typedFetch<PaperChunksResponse>(`/api/papers/${encodeURIComponent(paperId)}?${params}`, {
-    signal,
-  });
+  return typedGet<PaperChunksResponse>(`/api/papers/${encodeURIComponent(paperId)}/chunks?${params}`, signal);
 }

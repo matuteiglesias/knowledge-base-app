@@ -93,6 +93,32 @@ class SearchResponse(BaseModel):
     hits: List[SearchHit]
 
 
+
+
+class CorpusInfoResponse(BaseModel):
+    corpus_name: Optional[str] = None
+    storage_backend: str
+    chunk_sets_dir: Optional[str] = None
+    cache_ready: bool
+    loaded_at: Optional[float] = None
+
+
+class CorpusHealthResponse(BaseModel):
+    status: str
+    n_papers: int
+    n_chunks: int
+    n_artifacts: int
+    n_invalid_artifacts: int
+    n_skipped_chunks: int = 0
+    dedupe_collisions: int = 0
+    warnings: List[str] = []
+
+
+class SearchV1Response(BaseModel):
+    capability: str
+    query: str
+    k: int
+    hits: List[SearchHit]
 class SummaryResult(BaseModel):
     summary_id: str
     request: Dict[str, Any]

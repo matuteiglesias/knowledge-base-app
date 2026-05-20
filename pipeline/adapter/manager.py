@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import socket
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -27,8 +29,6 @@ except Exception:  # lightweight fallback for import smoke tests
     CHUNKS_DIR = REPO_ROOT / "store" / "chunks"
     CHROMA_DIR = REPO_ROOT / "store" / "chroma"
 
-from pipeline.adapter.grobid_ingest import generate_teis_from_pdfs
-from pipeline.producer.tei_runner import parse_teis_to_chunks
 from pipeline.corpus import resolve_corpus_paths
 
 logger = logging.getLogger("pipeline.adapter.manager")
@@ -113,15 +113,150 @@ def full_run(
     }
 
     if do_grobid:
+        from pipeline.adapter.grobid_ingest import generate_teis_from_pdfs
         result["grobid"] = generate_teis_from_pdfs(pdf_dir, tei_dir, **grobid_opts)
 
     if do_parse:
+        from pipeline.producer.tei_runner import parse_teis_to_chunks
         result["parse"] = parse_teis_to_chunks(tei_dir, chunks_dir, **parse_opts)
 
     if do_ingest:
         result["ingest"] = _maybe_ingest_chunks_to_chroma(chunks_dir, chroma_dir, **ingest_opts)
 
     return result
+
+
+def _is_port_available(port: int, host: str = "127.0.0.1") -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.3)
+        return sock.connect_ex((host, int(port))) != 0
+
+
+def _probe_grobid(url: Optional[str] = None, timeout: float = 1.5) -> bool:
+    try:
+        import requests
+        from shared.config import GROBID_URL
+        target = url or GROBID_URL
+        r = requests.get(target, timeout=timeout)
+        return r.status_code < 500
+    except Exception:
+        return False
+
+
+def _validate_chunk_set_local(path: Path) -> Dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"ok": False, "error": f"invalid_json: {exc}", "null_header_path": 0, "duplicate_chunk_ids": 0}
+
+    chunks = payload.get("chunks") or []
+    if not isinstance(chunks, list):
+        return {"ok": False, "error": "chunks_not_list", "null_header_path": 0, "duplicate_chunk_ids": 0}
+
+    null_header = 0
+    seen = set()
+    dupes = 0
+    for ch in chunks:
+        if not isinstance(ch, dict):
+            continue
+        if ch.get("header_path") in (None, "", []):
+            null_header += 1
+        cid = ch.get("chunk_id")
+        if cid in seen:
+            dupes += 1
+        elif cid is not None:
+            seen.add(cid)
+    return {"ok": True, "error": None, "null_header_path": null_header, "duplicate_chunk_ids": dupes}
+
+
+def run_doctor(*, corpus: str, strict: bool = False, as_json: bool = False, check_grobid: bool = False, port: Optional[int] = None) -> Dict[str, Any]:
+    cp = resolve_corpus_paths(corpus).ensure_dirs()
+
+    pdfs = sorted(cp.pdfs.glob("*.pdf")) if cp.pdfs.exists() else []
+    xmls = sorted([p for p in cp.xmls.glob("*.xml") if p.is_file()]) if cp.xmls.exists() else []
+    chunk_sets = sorted(cp.chunk_sets.glob("*.chunk_set.json")) if cp.chunk_sets.exists() else []
+    review_csvs = sorted(cp.review.glob("*.csv")) if cp.review.exists() else []
+
+    failures = []
+    for d in (cp.xmls / "failures", cp.chunks / "failures"):
+        if d.exists():
+            failures.extend(sorted(d.glob("*.fail.json")))
+
+    validation = []
+    invalid_count = 0
+    null_header_count = 0
+    duplicate_chunk_ids = 0
+    for cs in chunk_sets:
+        v = _validate_chunk_set_local(cs)
+        validation.append({"path": str(cs), **v})
+        if not v["ok"]:
+            invalid_count += 1
+        null_header_count += int(v.get("null_header_path", 0))
+        duplicate_chunk_ids += int(v.get("duplicate_chunk_ids", 0))
+
+    warnings = []
+    errors = []
+
+    if len(pdfs) > 0 and len(xmls) == 0:
+        warnings.append("PDFs exist but no XMLs generated yet")
+    if len(xmls) > 0 and len(chunk_sets) == 0:
+        warnings.append("XMLs exist but no chunk_set artifacts generated yet")
+    if invalid_count > 0:
+        errors.append(f"{invalid_count} invalid chunk_set artifact(s)")
+    if null_header_count > 0:
+        warnings.append(f"{null_header_count} chunks have null/empty header_path")
+    if duplicate_chunk_ids > 0:
+        warnings.append(f"{duplicate_chunk_ids} duplicate chunk_id occurrences detected")
+
+    grobid_reachable = None
+    if check_grobid:
+        grobid_reachable = _probe_grobid()
+        if not grobid_reachable:
+            errors.append("GROBID not reachable")
+
+    port_available = None
+    if port is not None:
+        port_available = _is_port_available(port)
+        if not port_available:
+            warnings.append(f"port {port} is occupied")
+
+    newest_xml = max((p.stat().st_mtime for p in xmls), default=None)
+    newest_chunk = max((p.stat().st_mtime for p in chunk_sets), default=None)
+    if newest_xml and newest_chunk and newest_xml > newest_chunk + 60:
+        warnings.append("chunk_set artifacts may be stale relative to XML inputs")
+
+    ready_to_parse = len(pdfs) > 0
+    ready_to_serve = len(chunk_sets) > 0 and invalid_count == 0
+
+    report = {
+        "corpus_name": cp.name,
+        "resolved_paths": {
+            "root": str(cp.root), "pdfs": str(cp.pdfs), "xmls": str(cp.xmls), "chunks": str(cp.chunks), "chunk_sets": str(cp.chunk_sets), "review": str(cp.review),
+        },
+        "n_pdfs": len(pdfs),
+        "n_xmls": len(xmls),
+        "n_chunk_sets": len(chunk_sets),
+        "n_review_csvs": len(review_csvs),
+        "n_failures": len(failures),
+        "latest_failure_files": [str(p) for p in sorted(failures, key=lambda x: x.stat().st_mtime, reverse=True)[:5]],
+        "chunk_set_validation": {"n_pass": len(chunk_sets)-invalid_count, "n_fail": invalid_count},
+        "null_header_path_count": null_header_count,
+        "duplicate_chunk_id_count": duplicate_chunk_ids,
+        "grobid_reachable": grobid_reachable,
+        "port_available": port_available,
+        "ready_to_parse": ready_to_parse,
+        "ready_to_serve": ready_to_serve,
+        "warnings": warnings,
+        "errors": errors,
+        "generated_at": time.time(),
+    }
+
+    if strict and (errors or invalid_count > 0):
+        report["strict_failed"] = True
+    else:
+        report["strict_failed"] = False
+
+    return report
 
 
 def _parse_args_and_run() -> None:
@@ -170,9 +305,26 @@ def _parse_args_and_run() -> None:
     f.add_argument("--dry-run", action="store_true")
     f.add_argument("--chunk-set-dir", default=None)
 
+    d = sub.add_parser("doctor", help="Check corpus readiness for parse/serve/browse")
+    d.add_argument("--corpus", required=True)
+    d.add_argument("--strict", action="store_true")
+    d.add_argument("--json", action="store_true")
+    d.add_argument("--check-grobid", action="store_true")
+    d.add_argument("--port", type=int, default=None)
+
     args = p.parse_args()
 
-    if args.cmd == "grobid":
+    if args.cmd == "doctor":
+        res = run_doctor(corpus=args.corpus, strict=args.strict, as_json=args.json, check_grobid=args.check_grobid, port=args.port)
+        if args.json:
+            print(json.dumps(res, ensure_ascii=False, indent=2))
+        else:
+            print(f"[doctor] corpus={res['corpus_name']} parse={res['ready_to_parse']} serve={res['ready_to_serve']}")
+            print(json.dumps(res, ensure_ascii=False, indent=2))
+        if args.strict and res.get("strict_failed"):
+            raise SystemExit(2)
+        return
+    elif args.cmd == "grobid":
         runtime_paths = _resolve_runtime_paths(
             corpus=args.corpus,
             pdf_dir=Path(args.pdf_dir).expanduser().resolve() if args.pdf_dir else None,
@@ -182,6 +334,7 @@ def _parse_args_and_run() -> None:
         )
         if runtime_paths["pdf_dir"] is None or runtime_paths["tei_dir"] is None:
             raise SystemExit("grobid requires pdf_dir and out_tei_dir, or --corpus")
+        from pipeline.adapter.grobid_ingest import generate_teis_from_pdfs
         res = generate_teis_from_pdfs(
             runtime_paths["pdf_dir"],
             runtime_paths["tei_dir"],
@@ -201,6 +354,7 @@ def _parse_args_and_run() -> None:
         )
         if runtime_paths["tei_dir"] is None or runtime_paths["chunks_dir"] is None:
             raise SystemExit("parse requires tei_dir and chunks_dir, or --corpus")
+        from pipeline.producer.tei_runner import parse_teis_to_chunks
         res = parse_teis_to_chunks(
             runtime_paths["tei_dir"],
             runtime_paths["chunks_dir"],
