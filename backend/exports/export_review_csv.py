@@ -5,7 +5,8 @@ import csv
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from backend.app.storage_adapter import StorageAdapter, create_adapter_from_env
+from backend.app.storage_adapter import ChunkSetStorageAdapter, StorageAdapter, create_adapter_from_env
+from pipeline.corpus import resolve_corpus_paths
 
 CSV_FIELDS = [
     "doc_id",
@@ -87,14 +88,48 @@ def export_review_csv(out_path: Path, storage: Optional[StorageAdapter] = None) 
     return out_path
 
 
+def _resolve_export_targets(
+    *,
+    out_path: Optional[str],
+    chunk_set_dir: Optional[str],
+    corpus: Optional[str],
+) -> tuple[Optional[Path], Optional[Path]]:
+    if corpus:
+        corpus_paths = resolve_corpus_paths(corpus).ensure_dirs()
+        resolved_out = Path(out_path).expanduser().resolve() if out_path else (corpus_paths.review / "papers.csv")
+        resolved_chunk_sets = (
+            Path(chunk_set_dir).expanduser().resolve() if chunk_set_dir else corpus_paths.chunk_sets
+        )
+        return resolved_out, resolved_chunk_sets
+
+    resolved_out = Path(out_path).expanduser().resolve() if out_path else None
+    resolved_chunk_sets = Path(chunk_set_dir).expanduser().resolve() if chunk_set_dir else None
+    return resolved_out, resolved_chunk_sets
+
+
 def cli() -> None:
     parser = argparse.ArgumentParser(description="Export paper-kb papers to abstract-scroller-friendly CSV.")
-    parser.add_argument("--out", required=True, help="Output CSV path")
+    parser.add_argument("--out", required=False, help="Output CSV path")
+    parser.add_argument("--chunk-set-dir", required=False, help="Chunk set directory to export from")
+    parser.add_argument("--corpus", required=False, help="Named corpus under corpora/<name>")
     args = parser.parse_args()
-    out = export_review_csv(Path(args.out))
+
+    out_path, chunk_set_path = _resolve_export_targets(
+        out_path=args.out,
+        chunk_set_dir=args.chunk_set_dir,
+        corpus=args.corpus,
+    )
+
+    if out_path is None:
+        raise SystemExit("--out is required unless --corpus is provided.")
+
+    storage: Optional[StorageAdapter] = None
+    if chunk_set_path is not None:
+        storage = ChunkSetStorageAdapter(chunk_sets_dir=str(chunk_set_path))
+
+    out = export_review_csv(out_path, storage=storage)
     print(str(out))
 
 
 if __name__ == "__main__":
     cli()
-
