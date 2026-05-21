@@ -53,9 +53,11 @@ export default function HomePage() {
     router.replace(`/?${params.toString()}`)
   }
 
-  const summaryBadge = () => (
-    <span className="text-xs rounded bg-slate-100 text-slate-700 px-2 py-0.5">unknown</span>
-  )
+  const summaryBadge = (paperId: string) => {
+    const isSelected = paperId === selected?.paperId
+    const label = isSelected ? 'selected' : 'unknown'
+    return <span className="text-xs rounded bg-slate-100 text-slate-700 px-2 py-0.5">{label}</span>
+  }
 
   return (
     <main className="space-y-4">
