@@ -116,6 +116,7 @@ def _failure_dump(failures_dir: Path, name: str, payload: Dict[str, Any]) -> Non
 
 
 from backend.app.chunks_fs import _to_mapping
+from pipeline.identity import make_paper_uid, safe_artifact_key, normalize_source_ref
 
 def parse_teis_to_chunks(
     tei_dir: Path,
@@ -157,9 +158,15 @@ def parse_teis_to_chunks(
             # paper_id = parsed.get("paper_id") or parsed.get("pid") or (_sanitize_filename(title) or tei_path.stem)
 
 
-            base = _sanitize_filename(parsed.get("paper_id") or parsed.get("pid") or title or tei_path.stem)[:120]
-            suffix = "_" + hashlib.sha1(str(tei_path).encode("utf8")).hexdigest()[:8]
-            paper_id = f"{base}{suffix}"
+            paper_uid = make_paper_uid(
+                doi=parsed.get("doi"),
+                source_file=tei_path.name,
+                title=title,
+                fallback=tei_path.stem,
+            )
+            paper_id = paper_uid
+            artifact_key = safe_artifact_key(paper_uid)
+            source_ref = normalize_source_ref(tei_path.name)
 
 
             raw_chunks = parsed.get("chunks", []) or []
@@ -237,6 +244,12 @@ def parse_teis_to_chunks(
 
             payload = [_to_mapping(m) for m in normalized_models]
 
+            for row in payload:
+                row["paper_uid"] = paper_uid
+                row["paper_id"] = paper_id
+                row.setdefault("artifact_key", artifact_key)
+                row.setdefault("source_ref", source_ref)
+
 
             # WRITE: keep legacy backend-compatible JSONL output.
             # This remains a legacy/internal side effect for backend compatibility,
@@ -258,10 +271,14 @@ def parse_teis_to_chunks(
                     entrypoint="paper_tei_parse",
                     fallback_source_file=tei_path.name,
                     paper_meta={
+                        "paper_uid": paper_uid,
                         "paper_id": paper_id,
                         "title": title,
+                        "display_title": title,
                         "authors": parsed.get("authors") if isinstance(parsed.get("authors"), list) else [],
                         "source_file": tei_path.name,
+                        "source_ref": source_ref,
+                        "artifact_key": artifact_key,
                     },
                 )
                 summary["n_chunk_set_artifacts"] += 1

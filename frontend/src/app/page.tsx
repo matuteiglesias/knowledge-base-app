@@ -6,9 +6,6 @@ import { usePapers } from '@/hooks/usePapers'
 import { useCorpus } from '@/hooks/useCorpus'
 import ChunksCard from '@/components/containers/ChunksCard'
 import PaperSummaryCard from '@/components/containers/PaperSummaryCard'
-import { fetchPaperSummary } from '@/api/papers'
-
-type SummaryRowStatus = 'loading' | 'ready' | 'missing' | 'error'
 
 export default function HomePage() {
   const router = useRouter()
@@ -17,7 +14,6 @@ export default function HomePage() {
   const { info, health, loading: corpusLoading, error: corpusError } = useCorpus()
   const [q, setQ] = useState('')
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null)
-  const [summaryStatusByPaper, setSummaryStatusByPaper] = useState<Record<string, SummaryRowStatus>>({})
 
   const filtered = useMemo(() => {
     const list = papers ?? []
@@ -44,44 +40,6 @@ export default function HomePage() {
     }
   }, [filtered, router, searchParams, selectedPaperId])
 
-  useEffect(() => {
-    const ids = (papers ?? []).map((p) => p.paperId)
-    if (!ids.length) {
-      setSummaryStatusByPaper({})
-      return
-    }
-
-    let cancelled = false
-    setSummaryStatusByPaper((prev) => {
-      const next = { ...prev }
-      for (const id of ids) {
-        if (!next[id]) next[id] = 'loading'
-      }
-      return next
-    })
-
-    Promise.all(ids.map(async (paperId) => {
-      try {
-        await fetchPaperSummary(paperId)
-        return [paperId, 'ready'] as const
-      } catch (err) {
-        const msg = String((err as Error)?.message || '')
-        if (msg.includes(' failed 404')) return [paperId, 'missing'] as const
-        return [paperId, 'error'] as const
-      }
-    })).then((results) => {
-      if (cancelled) return
-      setSummaryStatusByPaper((prev) => {
-        const next = { ...prev }
-        for (const [paperId, status] of results) next[paperId] = status
-        return next
-      })
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [papers])
 
   const selected = filtered.find((p) => p.paperId === selectedPaperId) ?? null
 
@@ -96,11 +54,9 @@ export default function HomePage() {
   }
 
   const summaryBadge = (paperId: string) => {
-    const status = summaryStatusByPaper[paperId] ?? 'loading'
-    if (status === 'ready') return <span className="text-xs rounded bg-green-100 text-green-800 px-2 py-0.5">ready</span>
-    if (status === 'missing') return <span className="text-xs rounded bg-slate-100 text-slate-700 px-2 py-0.5">missing</span>
-    if (status === 'error') return <span className="text-xs rounded bg-red-100 text-red-700 px-2 py-0.5">error</span>
-    return <span className="text-xs rounded bg-amber-100 text-amber-700 px-2 py-0.5">loading</span>
+    const isSelected = paperId === selected?.paperId
+    const label = isSelected ? 'selected' : 'unknown'
+    return <span className="text-xs rounded bg-slate-100 text-slate-700 px-2 py-0.5">{label}</span>
   }
 
   return (
