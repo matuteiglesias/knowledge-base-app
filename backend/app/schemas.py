@@ -140,6 +140,7 @@ class Topic(BaseModel):
 class SummaryGenerateRequest(BaseModel):
     provider: str = "mock"
     force: bool = False
+    agent_mode: str = "client"
 
 
 class SummaryTask(BaseModel):

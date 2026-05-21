@@ -14,14 +14,15 @@ from backend.exports.summary_artifacts import build_summary_artifact, safe_paper
 from backend.llm.agent_framework_provider import AgentFrameworkSummaryProvider
 from backend.llm.base import SummaryInput
 from backend.llm.mock_provider import MockSummaryProvider
+from backend.llm.summary_output_schema import SummaryLLMOutput
 from pipeline.corpus import resolve_corpus_paths
 
 
-def _provider(name: str, model: str | None = None, env_file_path: str | None = None):
+def _provider(name: str, model: str | None = None, env_file_path: str | None = None, agent_mode: str = "client"):
     if name == "mock":
         return MockSummaryProvider()
     if name == "agent-framework":
-        return AgentFrameworkSummaryProvider(model=model, env_file_path=env_file_path)
+        return AgentFrameworkSummaryProvider(model=model, env_file_path=env_file_path, agent_mode=agent_mode)
     raise ValueError(f"unknown provider: {name}")
 
 
@@ -98,6 +99,39 @@ async def _execute_provider(provider: Any, row: dict[str, Any]) -> dict[str, Any
     )
 
 
+def _validate_summary_payload(payload: dict[str, Any], paper_id: str) -> dict[str, Any]:
+    try:
+        validated = SummaryLLMOutput.model_validate(payload)
+    except Exception as exc:
+        raise ValueError(f"Invalid LLM summary output for paper_id={paper_id}: {exc}") from exc
+    return validated.model_dump()
+
+
+def _append_failure_record(
+    *,
+    out_path: Path,
+    paper_id: str,
+    mode: str,
+    error: str,
+    final_summary_path: Path,
+    intermediate_path: Path | None,
+) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("a", encoding="utf-8") as dst:
+        dst.write(json.dumps({
+            "paper_id": paper_id,
+            "mode": mode,
+            "status": "failed_validation",
+            "error": error,
+            "n_groups": 0,
+            "n_section_calls": 0,
+            "n_synthesis_calls": 0,
+            "provider_calls_total": 0,
+            "intermediate_path": str(intermediate_path) if intermediate_path else None,
+            "final_summary_path": str(final_summary_path),
+        }, ensure_ascii=False) + "\n")
+
+
 async def generate_summary_for_row(corpus: str, row: dict[str, Any], provider_name: str, force: bool = False, provider: Any | None = None) -> tuple[dict[str, Any], bool]:
     provider = provider or _provider(provider_name)
     paths = resolve_corpus_paths(corpus).ensure_dirs()
@@ -108,7 +142,7 @@ async def generate_summary_for_row(corpus: str, row: dict[str, Any], provider_na
     if target.exists() and not force:
         return json.loads(target.read_text(encoding="utf-8")), False
 
-    payload = await _execute_provider(provider, row)
+    payload = _validate_summary_payload(await _execute_provider(provider, row), pid)
     artifact = build_summary_artifact(
         paper_id=pid,
         title=str(row.get("title") or ""),
@@ -138,7 +172,10 @@ async def generate_summary_for_row_hierarchical(corpus: str, row: dict[str, Any]
     storage = ChunkSetStorageAdapter(chunk_sets_dir=str(paths.chunk_sets))
     storage.load_caches()
     all_chunks = storage.list_chunks(pid, limit=1000000).get("chunks", [])
-    groups = _group_chunks(all_chunks)
+    # Small-paper fast path: selected chunks -> final summary directly.
+    small_paper_chunk_threshold = 8
+    is_small_paper = len(all_chunks) <= small_paper_chunk_threshold
+    groups = [] if is_small_paper else _group_chunks(all_chunks, window_size=8, max_group_chars=6000)
 
     inter_path = paths.root / "summary_runs" / run_id / "intermediate" / f"{safe_paper_id(pid)}.section_summaries.jsonl"
     inter_path.parent.mkdir(parents=True, exist_ok=True)
@@ -148,18 +185,21 @@ async def generate_summary_for_row_hierarchical(corpus: str, row: dict[str, Any]
     if inter_path.exists() and not force:
         section_records = [json.loads(ln) for ln in inter_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
-    if not section_records:
+    if not section_records and groups:
         for g in groups:
             section_prompt = (
                 "Summarize this section of a paper for a thesis literature review. Return JSON only with keys: "
                 "summary, method, data, limitations, relevance_to_thesis, warnings.\n"
                 f"paper_id={pid}\nsection={g['group_label']}\nContext:\n{g['text']}"
             )
-            payload = await _execute_provider(provider, {
-                "paper_id": pid,
-                "prompt": section_prompt,
-                "context": {"group_id": g["group_id"], "group_label": g["group_label"], "chunk_ids": g["chunk_ids"]},
-            })
+            payload = _validate_summary_payload(
+                await _execute_provider(provider, {
+                    "paper_id": pid,
+                    "prompt": section_prompt,
+                    "context": {"group_id": g["group_id"], "group_label": g["group_label"], "chunk_ids": g["chunk_ids"]},
+                }),
+                pid,
+            )
             section_records.append({
                 "paper_id": pid,
                 "group_id": g["group_id"],
@@ -172,17 +212,28 @@ async def generate_summary_for_row_hierarchical(corpus: str, row: dict[str, Any]
             for rec in section_records:
                 fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-    synthesis_context = "\n".join(
-        f"[{i}] section={r.get('group_label','')} summary={str((r.get('payload') or {}).get('one_line') or (r.get('payload') or {}).get('summary') or '')}"
-        for i, r in enumerate(section_records, 1)
-    )[:12000]
-    synthesis_prompt = (
-        "Synthesize a single paper summary from section summaries. Return JSON only with keys: "
-        "one_line,research_question,data,method,main_contribution,limitations,relevance_to_thesis,suggested_tags,confidence,warnings.\n"
-        f"paper_id={pid}\ntitle={row.get('title','')}\nSections:\n{synthesis_context}"
-    )
-    final_payload = await _execute_provider(provider, {"paper_id": pid, "prompt": synthesis_prompt, "context": {"n_sections": len(section_records)}})
-    n_synthesis_calls = 1
+    if groups:
+        synthesis_context = "\n".join(
+            f"[{i}] section={r.get('group_label','')} summary={str((r.get('payload') or {}).get('one_line') or (r.get('payload') or {}).get('summary') or '')}"
+            for i, r in enumerate(section_records, 1)
+        )[:12000]
+        synthesis_prompt = (
+            "Synthesize a single paper summary from section summaries. Return JSON only with keys: "
+            "one_line,research_question,data,method,main_contribution,limitations,relevance_to_thesis,suggested_tags,confidence,warnings.\n"
+            f"paper_id={pid}\ntitle={row.get('title','')}\nSections:\n{synthesis_context}"
+        )
+        final_payload = _validate_summary_payload(
+            await _execute_provider(provider, {"paper_id": pid, "prompt": synthesis_prompt, "context": {"n_sections": len(section_records)}}),
+            pid,
+        )
+        n_synthesis_calls = 1
+    else:
+        direct_prompt = row.get("prompt") or ""
+        final_payload = _validate_summary_payload(
+            await _execute_provider(provider, {"paper_id": pid, "prompt": str(direct_prompt), "context": row.get("context") or {}}),
+            pid,
+        )
+        n_synthesis_calls = 1
 
     artifact = build_summary_artifact(
         paper_id=pid,
@@ -208,8 +259,8 @@ async def generate_summary_for_paper(corpus: str, paper_id: str, provider_name: 
     row = _build_row_for_paper(corpus=corpus, paper_id=paper_id)
     return await generate_summary_for_row(corpus=corpus, row=row, provider_name=provider_name, force=force, provider=provider)
 
-async def generate_summaries(corpus: str, provider_name: str, limit: int | None = None, force: bool = False, model: str | None = None, env_file_path: str | None = None, mode: str = "direct") -> tuple[Path, RunStats]:
-    provider = _provider(provider_name, model=model, env_file_path=env_file_path)
+async def generate_summaries(corpus: str, provider_name: str, limit: int | None = None, force: bool = False, model: str | None = None, env_file_path: str | None = None, mode: str = "direct", agent_mode: str = "client") -> tuple[Path, RunStats]:
+    provider = _provider(provider_name, model=model, env_file_path=env_file_path, agent_mode=agent_mode)
     inputs_path, _ = build_summary_inputs(corpus=corpus, limit=limit)
     rows = _read_input_rows(inputs_path)
 
@@ -222,24 +273,57 @@ async def generate_summaries(corpus: str, provider_name: str, limit: int | None 
     with out_path.open("w", encoding="utf-8") as dst:
         for row in rows:
             pid = row["paper_id"]
-            if mode == "hierarchical":
-                artifact, was_written, n_section_calls, n_synthesis_calls = await generate_summary_for_row_hierarchical(
-                    corpus=corpus, row=row, provider_name=provider_name, run_id=run_id, force=force, provider=provider
+            try:
+                if mode == "hierarchical":
+                    artifact, was_written, n_section_calls, n_synthesis_calls = await generate_summary_for_row_hierarchical(
+                        corpus=corpus, row=row, provider_name=provider_name, run_id=run_id, force=force, provider=provider
+                    )
+                    stats.n_section_calls += n_section_calls
+                    stats.n_synthesis_calls += n_synthesis_calls
+                    if was_written:
+                        stats.provider_calls += (n_section_calls + n_synthesis_calls)
+                    output_row = {
+                        "paper_id": pid,
+                        "mode": "hierarchical",
+                        "n_groups": n_section_calls,
+                        "n_section_calls": n_section_calls,
+                        "n_synthesis_calls": n_synthesis_calls,
+                        "provider_calls_total": (n_section_calls + n_synthesis_calls) if was_written else 0,
+                        "intermediate_path": str(paths.root / "summary_runs" / run_id / "intermediate" / f"{safe_paper_id(pid)}.section_summaries.jsonl"),
+                        "final_summary_path": str(summary_path(paths.root / "summaries", pid)),
+                    }
+                else:
+                    artifact, was_written = await generate_summary_for_row(corpus=corpus, row=row, provider_name=provider_name, force=force, provider=provider)
+                    if was_written:
+                        stats.provider_calls += 1
+                    output_row = {
+                        "paper_id": pid,
+                        "mode": "direct",
+                        "n_groups": 0,
+                        "n_section_calls": 0,
+                        "n_synthesis_calls": 0,
+                        "provider_calls_total": 1 if was_written else 0,
+                        "intermediate_path": None,
+                        "final_summary_path": str(summary_path(paths.root / "summaries", pid)),
+                    }
+            except ValueError as exc:
+                _append_failure_record(
+                    out_path=out_path,
+                    paper_id=pid,
+                    mode=mode,
+                    error=str(exc),
+                    final_summary_path=summary_path(paths.root / "summaries", pid),
+                    intermediate_path=(paths.root / "summary_runs" / run_id / "intermediate" / f"{safe_paper_id(pid)}.section_summaries.jsonl") if mode == "hierarchical" else None,
                 )
-                stats.n_section_calls += n_section_calls
-                stats.n_synthesis_calls += n_synthesis_calls
-                if was_written:
-                    stats.provider_calls += (n_section_calls + n_synthesis_calls)
-            else:
-                artifact, was_written = await generate_summary_for_row(corpus=corpus, row=row, provider_name=provider_name, force=force, provider=provider)
-                if was_written:
-                    stats.provider_calls += 1
+                continue
             if was_written:
                 stats.written += 1
-                dst.write(json.dumps({"paper_id": pid, "status": "written"}, ensure_ascii=False) + "\n")
+                output_row["status"] = "written"
+                dst.write(json.dumps(output_row, ensure_ascii=False) + "\n")
             else:
                 stats.skipped_existing += 1
-                dst.write(json.dumps({"paper_id": pid, "status": "skipped_existing"}, ensure_ascii=False) + "\n")
+                output_row["status"] = "skipped_existing"
+                dst.write(json.dumps(output_row, ensure_ascii=False) + "\n")
 
     run_record = {
         "run_id": run_id,
@@ -265,8 +349,9 @@ def main() -> None:
     p.add_argument("--model", default=None)
     p.add_argument("--env-file-path", default=None)
     p.add_argument("--mode", choices=["direct", "hierarchical"], default="direct")
+    p.add_argument("--agent-mode", choices=["client", "agent"], default="client")
     a = p.parse_args()
-    out, stats = asyncio.run(generate_summaries(a.corpus, a.provider, a.limit, a.force, model=a.model, env_file_path=a.env_file_path, mode=a.mode))
+    out, stats = asyncio.run(generate_summaries(a.corpus, a.provider, a.limit, a.force, model=a.model, env_file_path=a.env_file_path, mode=a.mode, agent_mode=a.agent_mode))
     print(f"outputs: {out}")
     print(f"written: {stats.written}")
     print(f"skipped_existing: {stats.skipped_existing}")
