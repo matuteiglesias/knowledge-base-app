@@ -25,7 +25,15 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { method: "GET", cache: "no-store", ...init });
   const body = await parseJsonSafe(res);
   if (!res.ok) {
-    throw new Error(`GET ${url} failed ${res.status}: ${JSON.stringify(body).slice(0, 400)}`);
+    const err = new Error(`GET ${url} failed ${res.status}: ${JSON.stringify(body).slice(0, 400)}`) as Error & {
+      status?: number;
+      body?: unknown;
+      url?: string;
+    };
+    err.status = res.status;
+    err.body = body;
+    err.url = url;
+    throw err;
   }
   return body as T;
 }
@@ -40,7 +48,15 @@ export async function apiPost<T>(path: string, payload: unknown, init?: RequestI
   });
   const body = await parseJsonSafe(res);
   if (!res.ok) {
-    throw new Error(`POST ${url} failed ${res.status}: ${JSON.stringify(body).slice(0, 400)}`);
+    const err = new Error(`POST ${url} failed ${res.status}: ${JSON.stringify(body).slice(0, 400)}`) as Error & {
+      status?: number;
+      body?: unknown;
+      url?: string;
+    };
+    err.status = res.status;
+    err.body = body;
+    err.url = url;
+    throw err;
   }
   return body as T;
 }

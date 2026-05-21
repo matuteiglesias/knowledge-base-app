@@ -10,7 +10,7 @@ class StubStorage:
     loaded_at = 123.4
 
     def __init__(self):
-        self._papers = [{"paper_id": "p1", "title": "Paper 1", "authors": ["Ada"], "n_chunks": 1, "preview": "x"}]
+        self._papers = [{"paper_id": "paper_1234abcde0", "title": "Paper 1", "authors": ["Ada"], "n_chunks": 1, "preview": "x"}]
 
     def list_papers(self):
         return self._papers
@@ -33,8 +33,8 @@ def _write_chunk_set():
     sets = paths.chunk_sets
     payload = {
         "artifact_kind": "chunk_set",
-        "paper_meta": {"paper_id": "p1", "title": "Paper 1"},
-        "chunks": [{"chunk_id": "p1_c0", "paper_id": "p1", "text": "alpha", "chunk_index": 0, "char_len": 5, "metadata": {"title": "Paper 1"}}],
+        "paper_meta": {"paper_id": "paper_1234abcde0", "title": "Paper 1"},
+        "chunks": [{"chunk_id": "paper_1234abcde0_c0", "paper_id": "paper_1234abcde0", "text": "alpha", "chunk_index": 0, "char_len": 5, "metadata": {"title": "Paper 1"}}],
     }
     (sets / "a.chunk_set.json").write_text(__import__("json").dumps(payload), encoding="utf-8")
 
@@ -50,23 +50,23 @@ def test_summary_api_flow(tmp_path, monkeypatch):
     _write_chunk_set()
     c = _client(tmp_path, monkeypatch)
 
-    missing = c.get('/api/papers/p1/summary')
+    missing = c.get('/api/papers/paper_1234abcde0/summary')
     assert missing.status_code == 404
 
-    generated = c.post('/api/papers/p1/summary:generate', json={"provider": "mock", "force": False})
+    generated = c.post('/api/papers/paper_1234abcde0/summary:generate', json={"provider": "mock", "force": False})
     assert generated.status_code == 200
     body = generated.json()
-    assert body["paper_id"] == "p1"
+    assert body["paper_id"] == "paper_1234abcde0"
 
-    fetched = c.get('/api/papers/p1/summary')
+    fetched = c.get('/api/papers/paper_1234abcde0/summary')
     assert fetched.status_code == 200
-    assert fetched.json()["paper_id"] == "p1"
+    assert fetched.json()["paper_id"] == "paper_1234abcde0"
 
-    again = c.post('/api/papers/p1/summary:generate', json={"provider": "mock", "force": False})
+    again = c.post('/api/papers/paper_1234abcde0/summary:generate', json={"provider": "mock", "force": False})
     assert again.status_code == 200
     assert again.json()["generated_at"] == body["generated_at"]
 
-    force = c.post('/api/papers/p1/summary:generate', json={"provider": "mock", "force": True})
+    force = c.post('/api/papers/paper_1234abcde0/summary:generate', json={"provider": "mock", "force": True})
     assert force.status_code == 200
     assert force.json()["generated_at"] != body["generated_at"]
 

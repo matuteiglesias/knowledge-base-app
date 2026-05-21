@@ -10,7 +10,7 @@ from typing import Any
 
 from backend.app.storage_adapter import ChunkSetStorageAdapter
 from backend.exports.build_summary_inputs import build_summary_inputs
-from backend.exports.summary_artifacts import build_summary_artifact, safe_paper_id, summary_path, write_json_atomic
+from backend.exports.summary_artifacts import build_summary_artifact, safe_paper_id, summary_path, write_json_atomic, is_canonical_paper_id
 from backend.llm.agent_framework_provider import AgentFrameworkSummaryProvider
 from backend.llm.base import SummaryInput
 from backend.llm.mock_provider import MockSummaryProvider
@@ -199,6 +199,14 @@ async def generate_summary_for_row_hierarchical(corpus: str, row: dict[str, Any]
     write_json_atomic(target, artifact)
     return artifact, True, n_section_calls, n_synthesis_calls
 
+
+
+
+async def generate_summary_for_paper(corpus: str, paper_id: str, provider_name: str, force: bool = False, provider: Any | None = None) -> tuple[dict[str, Any], bool]:
+    if not is_canonical_paper_id(paper_id):
+        raise KeyError(f"paper not found: {paper_id}")
+    row = _build_row_for_paper(corpus=corpus, paper_id=paper_id)
+    return await generate_summary_for_row(corpus=corpus, row=row, provider_name=provider_name, force=force, provider=provider)
 
 async def generate_summaries(corpus: str, provider_name: str, limit: int | None = None, force: bool = False, model: str | None = None, env_file_path: str | None = None, mode: str = "direct") -> tuple[Path, RunStats]:
     provider = _provider(provider_name, model=model, env_file_path=env_file_path)

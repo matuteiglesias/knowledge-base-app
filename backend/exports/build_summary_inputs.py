@@ -1,13 +1,13 @@
 from __future__ import annotations
 import argparse, json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from backend.app.storage_adapter import ChunkSetStorageAdapter
 from pipeline.corpus import resolve_corpus_paths
 
 def build_summary_inputs(corpus: str, limit: int | None = None, max_chunks: int = 6, max_chars: int = 6000) -> tuple[Path, int]:
     paths = resolve_corpus_paths(corpus).ensure_dirs()
-    run_id = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_path = paths.root / "summary_runs" / run_id / "inputs" / "paper_summary_inputs.jsonl"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     storage = ChunkSetStorageAdapter(chunk_sets_dir=str(paths.chunk_sets))

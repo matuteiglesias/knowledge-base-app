@@ -53,7 +53,7 @@ from backend.app.schemas import (
 # Services (business logic) - these should be adapted to accept a storage adapter
 from backend.app import services
 from backend.exports.generate_summaries import generate_summary_for_paper
-from backend.exports.summary_artifacts import summary_path
+from backend.exports.summary_artifacts import summary_path, is_canonical_paper_id
 from pipeline.corpus import resolve_corpus_paths
 
 # FS normalizer kept authoritative
@@ -320,6 +320,8 @@ def api_get_filtered_chunks(paper_id: str, q: str = "", offset: int = 0, limit: 
 
 @app.get("/api/papers/{paper_id}/summary", tags=["papers","summaries"], summary="Get saved paper summary")
 def api_get_paper_summary(paper_id: str, storage: StorageAdapter = Depends(get_storage)):
+    if not is_canonical_paper_id(paper_id):
+        raise HTTPException(status_code=404, detail="paper not found")
     try:
         services.get_paper_detail(storage, paper_id=paper_id)
     except services.NotFoundError:
@@ -335,6 +337,8 @@ def api_get_paper_summary(paper_id: str, storage: StorageAdapter = Depends(get_s
 
 @app.post("/api/papers/{paper_id}/summary:generate", tags=["papers","summaries"], summary="Generate or return paper summary")
 def api_generate_paper_summary(paper_id: str, req: SummaryGenerateRequest, storage: StorageAdapter = Depends(get_storage)):
+    if not is_canonical_paper_id(paper_id):
+        raise HTTPException(status_code=404, detail="paper not found")
     try:
         services.get_paper_detail(storage, paper_id=paper_id)
     except services.NotFoundError:
