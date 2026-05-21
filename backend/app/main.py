@@ -53,6 +53,7 @@ from backend.app.schemas import (
 # Services (business logic) - these should be adapted to accept a storage adapter
 from backend.app import services
 from backend.exports.generate_summaries import generate_summary_for_paper
+from backend.exports.generate_summaries import _provider as summary_provider_factory
 from backend.exports.summary_artifacts import summary_path, is_canonical_paper_id
 from pipeline.corpus import resolve_corpus_paths
 
@@ -347,7 +348,13 @@ def api_generate_paper_summary(paper_id: str, req: SummaryGenerateRequest, stora
     corpus_name = os.getenv("PAPER_KB_CORPUS", "default")
     try:
         summary, _written = asyncio.run(
-            generate_summary_for_paper(corpus=corpus_name, paper_id=paper_id, provider_name=req.provider, force=bool(req.force))
+            generate_summary_for_paper(
+                corpus=corpus_name,
+                paper_id=paper_id,
+                provider_name=req.provider,
+                force=bool(req.force),
+                provider=summary_provider_factory(req.provider, agent_mode=getattr(req, "agent_mode", "client")),
+            )
         )
         return summary
     except ValueError as e:
@@ -660,4 +667,3 @@ if __name__ == "__main__":
 #         return {"n_sample": len(sample), "sample": sample}
 #     except Exception as e:
 #         raise HTTPException(status_code=500, detail=str(e))
-
