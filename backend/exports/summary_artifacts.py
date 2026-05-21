@@ -9,6 +9,7 @@ from typing import Any
 SUMMARY_VERSION = 1
 _CONFIDENCE_ALLOWED = {"low", "medium", "high"}
 _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9._-]+")
+_CANONICAL_PAPER_ID_RE = re.compile(r"^paper_[0-9a-f]{10}$")
 
 
 def safe_paper_id(paper_id: str) -> str:
@@ -60,3 +61,7 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
+
+
+def is_canonical_paper_id(paper_id: str) -> bool:
+    return bool(_CANONICAL_PAPER_ID_RE.match(str(paper_id or "").strip()))

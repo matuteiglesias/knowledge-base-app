@@ -98,7 +98,7 @@ export default function HomePage() {
                     <tr key={p.paperId} className={`border-b cursor-pointer hover:bg-slate-50 ${isSelected ? 'bg-slate-100' : ''}`} onClick={() => onSelectPaper(p.paperId)}>
                       <td>{p.title || p.paperId}</td>
                       <td>{p.nChunks}</td>
-                      <td>{summaryBadge(p.paperId)}</td>
+                      <td>{summaryBadge()}</td>
                       <td>{p.sourceFile || '—'}</td>
                     </tr>
                   )
