@@ -16,7 +16,7 @@ export function usePaperSummary(paperId?: string | null) {
       try {
         return await fetchPaperSummary(paperId, signal as AbortSignal | undefined);
       } catch (err: any) {
-        if (String(err?.message || "").includes(" failed 404")) return null;
+        if (err?.status === 404) return null;
         throw err;
       }
     },

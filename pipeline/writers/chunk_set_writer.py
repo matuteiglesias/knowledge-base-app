@@ -71,6 +71,9 @@ def _chunk_to_record(
     text = _first_present(m, ["text", "content", "document"], "") or ""
     paper_id = _first_present(m, ["paper_id", "paper", "source_id"], meta.get("paper_id"))
     source_file = _first_present(m, ["source_file", "source"], meta.get("source_file") or fallback_source_file)
+    source_ref = _first_present(m, ["source_ref"], meta.get("source_ref") or source_file)
+    paper_uid = _first_present(m, ["paper_uid"], meta.get("paper_uid") or paper_id)
+    artifact_key = _first_present(m, ["artifact_key"], meta.get("artifact_key") or paper_uid or paper_id)
     header_path = _first_present(m, ["header_path", "section_title"], meta.get("header_path") or meta.get("section_title"))
     document_id = _first_present(m, ["document_id", "document", "doc_id"], meta.get("document_id") or paper_id)
     chunk_index = _first_present(m, ["chunk_index", "index"], meta.get("chunk_index"))
@@ -95,6 +98,9 @@ def _chunk_to_record(
         "chunk_index": chunk_index,
         "char_len": len(text_str),
         "source_file": str(source_file) if source_file else None,
+        "source_ref": str(source_ref) if source_ref else None,
+        "paper_uid": str(paper_uid) if paper_uid else None,
+        "artifact_key": str(artifact_key) if artifact_key else None,
         "header_path": header_path,
         "metadata": clean_meta,
     })
