@@ -1,0 +1,44 @@
+# This file declares the repository boundary and its place in the GitHub estate.
+schema_version: 1
+id: kb.paper.corpus
+repository:
+  id: repo.knowledge-base-app
+  github: matuteiglesias/paper-kb
+domain: knowledge
+system: kb.paper
+role: paper-corpus-producer
+lifecycle: active
+authority:
+  status: proposed
+  owns:
+  - paper ingestion and parsing
+  - paper-oriented chunks and review exports
+  - paper corpus APIs and structured summaries
+  does_not_own:
+  - shared interoperability contract authority
+  - general chat knowledge ingestion
+  - estate routing or MCP access policy
+interfaces:
+  consumes:
+  - contract:kb.chunk-set@1
+  - contract:kb.review-node@1
+  produces:
+  - artifact:kb.paper-chunk-set@1
+  - artifact:kb.review-node@1
+upstream:
+- repo.kb-contracts
+downstream:
+- repo.knowledge-inspect
+canonical_commands: []
+generated_paths:
+- data/
+- artifacts/
+verification:
+  status: metadata-only
+  last_verified: '2026-08-04'
+  command: null
+  unknowns:
+  - canonical run and test commands require local confirmation
+maintenance:
+  cadence: quarterly
+  next_review: '2026-11-01'
