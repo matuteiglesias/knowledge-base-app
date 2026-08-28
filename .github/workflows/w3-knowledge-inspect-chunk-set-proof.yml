@@ -1,0 +1,89 @@
+name: W3 paper-kb to knowledge-inspect chunk-set proof
+
+on:
+  pull_request:
+  push:
+    branches:
+      - test/w3-knowledge-inspect-chunk-set-proof
+
+jobs:
+  prove-chunk-set-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out paper-kb producer
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate chunk_set with paper-kb writer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from pipeline.writers.chunk_set_writer import write_chunk_set_artifact
+
+          out = Path('.w3/producer-artifacts')
+          path = write_chunk_set_artifact(
+              [
+                  {
+                      'chunk_id': 'paper_demo:0001',
+                      'paper_id': 'paper_demo',
+                      'text': 'Governed knowledge systems preserve producer identity across repository boundaries.',
+                      'chunk_index': 0,
+                      'metadata': {'section_title': 'Introduction'},
+                  },
+                  {
+                      'chunk_id': 'paper_demo:0002',
+                      'paper_id': 'paper_demo',
+                      'text': 'Interface proof should validate the exact artifact emitted by the producer.',
+                      'chunk_index': 1,
+                      'metadata': {'section_title': 'Methods'},
+                  },
+              ],
+              source_items=['paper_demo.xml'],
+              run_id='w3-paper-kb-demo',
+              out_dir=out,
+              producer='paper-kb',
+              entrypoint='w3_interface_proof',
+              paper_meta={'title': 'W3 interface proof fixture'},
+          )
+          print(path)
+          PY
+
+      - name: Check out pinned Knowledge Inspect consumer
+        uses: actions/checkout@v4
+        with:
+          repository: matuteiglesias/knowledge-inspect
+          ref: 45668d539d9975fe2a507f98e688d14179dc0dfd
+          path: .w3/knowledge-inspect
+
+      - name: Validate exact producer artifact with consumer CLI
+        run: |
+          PYTHONPATH=.w3/knowledge-inspect \
+            python -m kb.cli.kb_validate_chunk_set \
+            .w3/producer-artifacts/w3-paper-kb-demo.chunk_set.json \
+            --format text
+
+      - name: Assert producer identity and bounded contents survived
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('.w3/producer-artifacts/w3-paper-kb-demo.chunk_set.json')
+          payload = json.loads(path.read_text())
+          assert payload['artifact_family'] == 'chunk_bus'
+          assert payload['artifact_kind'] == 'chunk_set'
+          assert payload['schema_version'] == 1
+          assert payload['producer'] == 'paper-kb'
+          assert payload['run_id'] == 'w3-paper-kb-demo'
+          assert payload['chunk_count'] == 2
+          assert [c['chunk_id'] for c in payload['chunks']] == ['paper_demo:0001', 'paper_demo:0002']
+          PY
+
+      - name: Run producer contract regression
+        run: |
+          python -m pip install -q pytest jsonschema
+          python -m pytest -q tests/test_chunk_set_writer_contract.py
