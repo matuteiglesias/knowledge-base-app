@@ -2,7 +2,7 @@
 schema_version: 1
 id: kb.paper.corpus
 repository:
-  id: repo.knowledge-base-app
+  id: repo.paper-kb
   github: matuteiglesias/paper-kb
 domain: knowledge
 system: kb.paper
@@ -29,16 +29,22 @@ upstream:
 - repo.kb-contracts
 downstream:
 - repo.knowledge-inspect
-canonical_commands: []
+canonical_commands:
+- make corpus-doctor CORPUS=tesislcd
+- make corpus-parse CORPUS=tesislcd
+- make corpus-validate CORPUS=tesislcd
+- make export-review CORPUS=tesislcd
+- make api-corpus CORPUS=tesislcd PORT=9000
 generated_paths:
 - data/
 - artifacts/
 verification:
   status: metadata-only
-  last_verified: '2026-08-04'
-  command: null
+  last_verified: '2026-08-28'
+  command: make corpus-validate CORPUS=tesislcd
   unknowns:
-  - canonical run and test commands require local confirmation
+  - canonical commands were reconciled against the README operator surface but not executed during W2
+  - exact current contract adoption for every producer output remains an interface-proof task for W3
 maintenance:
   cadence: quarterly
   next_review: '2026-11-01'
