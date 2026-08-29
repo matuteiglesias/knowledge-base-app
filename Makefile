@@ -14,7 +14,7 @@ EXPORT_REVIEW_RECORDS_CMD = python3 -m pipeline.projections.review_records --cor
 EXPORT_REVIEW_CSV_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
 API_CORPUS_CMD = PAPER_KB_CORPUS=$(CORPUS) PAPER_KB_CHUNK_SETS_DIR=corpora/$(CORPUS)/chunk_sets STORAGE_BACKEND=chunk_set uvicorn backend.app.main:app --reload --port $(PORT)
 
-.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record export-review-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
+.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record architecture-check read-model-identity export-review-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
 
 help:
 	@echo "Operator targets (run from repo root):"
@@ -23,6 +23,8 @@ help:
 	@echo "  make corpus-parse CORPUS=tesislcd"
 	@echo "  make corpus-validate CORPUS=tesislcd"
 	@echo "  make contract-review-record"
+	@echo "  make architecture-check                    # executable modular-monorepo boundary rules"
+	@echo "  make read-model-identity                   # paper_uid survives chunk_set -> read/API model"
 	@echo "  make export-review-records CORPUS=tesislcd   # preferred machine interface: paper.review-record@1 JSONL"
 	@echo "  make api-corpus CORPUS=tesislcd PORT=9000"
 	@echo "  make frontend-dev"
@@ -52,6 +54,12 @@ corpus-validate:
 
 contract-review-record:
 	python3 tests/test_review_record_contract.py
+
+architecture-check:
+	python3 tests/test_component_boundaries.py
+
+read-model-identity:
+	python3 tests/test_read_model_identity.py
 
 export-review-records:
 	echo $(EXPORT_REVIEW_RECORDS_CMD)
