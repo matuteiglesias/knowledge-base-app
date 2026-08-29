@@ -26,17 +26,20 @@ interfaces:
   consumes: []
   produces:
   - artifact:kb.paper-chunk-set@1
+  - artifact:paper.review-record@1
   declares:
   - contract:paper.review-record@1
 upstream:
 - repo.kb-contracts
 downstream:
 - repo.knowledge-inspect
+- repo.abstract-scroller
 canonical_commands:
 - make corpus-doctor CORPUS=tesislcd
 - make corpus-parse CORPUS=tesislcd
 - make corpus-validate CORPUS=tesislcd
 - make contract-review-record
+- make export-review-records CORPUS=tesislcd
 - make export-review CORPUS=tesislcd
 - make api-corpus CORPUS=tesislcd PORT=9000
 generated_paths:
@@ -50,10 +53,11 @@ verification:
   - paper-kb chunk_set validates in Knowledge Inspect through W3 cross-repo CI
   expected_on_this_branch:
   - paper.review-record@1 schema and sanitized fixtures validate offline
+  - canonical paper.review-record@1 JSONL is projected directly from governed chunk_set artifacts
+  - canonical projection fails closed when paper_uid is absent or duplicated
   unknowns:
-  - canonical paper.review-record JSONL emission is P2 and does not exist yet
-  - Abstract Scroller consumption of paper.review-record is P3 and is not yet proven
-  - current ChunkSetStorageAdapter does not consistently elevate canonical paper_uid into its paper-level read model
+  - Abstract Scroller consumption of canonical paper.review-record@1 is P3 and is not yet proven
+  - current ChunkSetStorageAdapter does not consistently elevate canonical paper_uid into its paper-level read model; canonical review projection deliberately does not depend on that service layer
 maintenance:
   cadence: quarterly
   next_review: '2026-11-01'
