@@ -11,10 +11,10 @@ GROBID_CMD = python3 -m pipeline.adapter.manager grobid --corpus $(CORPUS) --rec
 PARSE_CMD = python3 -m pipeline.adapter.manager parse --corpus $(CORPUS) --min-len $(MIN_LEN) $(if $(CHUNK_SET_DIR),--chunk-set-dir $(CHUNK_SET_DIR),)
 VALIDATE_CMD = python3 -m pipeline.adapter.manager doctor --corpus $(CORPUS) --strict --json
 EXPORT_REVIEW_RECORDS_CMD = python3 -m pipeline.projections.review_records --corpus $(CORPUS)
-EXPORT_REVIEW_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
+EXPORT_REVIEW_CSV_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
 API_CORPUS_CMD = PAPER_KB_CORPUS=$(CORPUS) PAPER_KB_CHUNK_SETS_DIR=corpora/$(CORPUS)/chunk_sets STORAGE_BACKEND=chunk_set uvicorn backend.app.main:app --reload --port $(PORT)
 
-.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record export-review-records api-corpus export-review frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
+.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record architecture-check read-model-identity export-review-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
 
 help:
 	@echo "Operator targets (run from repo root):"
@@ -23,11 +23,16 @@ help:
 	@echo "  make corpus-parse CORPUS=tesislcd"
 	@echo "  make corpus-validate CORPUS=tesislcd"
 	@echo "  make contract-review-record"
-	@echo "  make export-review-records CORPUS=tesislcd   # canonical paper.review-record@1 JSONL"
-	@echo "  make export-review CORPUS=tesislcd           # legacy/convenience CSV"
+	@echo "  make architecture-check                    # executable modular-monorepo boundary rules"
+	@echo "  make read-model-identity                   # paper_uid survives chunk_set -> read/API model"
+	@echo "  make export-review-records CORPUS=tesislcd   # preferred machine interface: paper.review-record@1 JSONL"
 	@echo "  make api-corpus CORPUS=tesislcd PORT=9000"
 	@echo "  make frontend-dev"
 	@echo "  make kill-port PORT=9000"
+	@echo ""
+	@echo "Compatibility targets:"
+	@echo "  make export-review-csv CORPUS=tesislcd       # legacy/convenience CSV"
+	@echo "  make export-review CORPUS=tesislcd           # deprecated alias for export-review-csv"
 	@echo ""
 	@echo "Legacy placeholders retained as explicit legacy-* targets."
 
@@ -50,19 +55,29 @@ corpus-validate:
 contract-review-record:
 	python3 tests/test_review_record_contract.py
 
+architecture-check:
+	python3 tests/test_component_boundaries.py
+
+read-model-identity:
+	python3 tests/test_read_model_identity.py
+
 export-review-records:
 	echo $(EXPORT_REVIEW_RECORDS_CMD)
 	$(EXPORT_REVIEW_RECORDS_CMD)
+
+export-review-csv:
+	@echo "[COMPATIBILITY] CSV review export; preferred machine interface is export-review-records."
+	echo $(EXPORT_REVIEW_CSV_CMD)
+	$(EXPORT_REVIEW_CSV_CMD)
+
+export-review:
+	@echo "[DEPRECATED ALIAS] use 'make export-review-csv CORPUS=$(CORPUS)' or, preferably, 'make export-review-records CORPUS=$(CORPUS)'."
+	$(MAKE) export-review-csv CORPUS=$(CORPUS)
 
 api-corpus:
 	python3 -c "import socket; s=socket.socket(); s.settimeout(0.2); busy=(s.connect_ex(('127.0.0.1', int('$(PORT)')))==0); s.close(); import sys; sys.exit(1 if busy else 0)" || { echo "Port $(PORT) is occupied. Run: make kill-port PORT=$(PORT)"; exit 2; }
 	echo $(API_CORPUS_CMD)
 	$(API_CORPUS_CMD)
-
-export-review:
-	@echo "[LEGACY/CONVENIENCE] CSV review export; canonical machine interface is export-review-records."
-	echo $(EXPORT_REVIEW_CMD)
-	$(EXPORT_REVIEW_CMD)
 
 frontend-dev:
 	echo "cd frontend && NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev"
@@ -80,7 +95,7 @@ legacy-smoke:
 	exit 2
 
 legacy-run-all:
-	echo "[LEGACY] run_all placeholder removed; use corpus-grobid + corpus-parse + api-corpus." 
+	echo "[LEGACY] run_all placeholder removed; use corpus-grobid + corpus-parse + api-corpus."
 	exit 2
 
 legacy-run: legacy-run-all

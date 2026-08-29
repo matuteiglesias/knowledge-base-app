@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "system": "kb.paper",
+  "architecture": "modular-monorepo",
+  "components": {
+    "source_acquisition": {
+      "paths": ["pipeline/sources", "pipeline/adapter"],
+      "depends_on": [],
+      "owns": ["source acquisition", "source-specific parser invocation"]
+    },
+    "corpus_core": {
+      "paths": ["pipeline/parsers", "pipeline/producer", "pipeline/writers", "pipeline/identity.py", "pipeline/corpus.py"],
+      "depends_on": ["source_acquisition"],
+      "owns": ["paper_uid", "chunk identity", "chunk_set production"]
+    },
+    "review_projection": {
+      "paths": ["pipeline/contracts", "pipeline/projections", "contracts/paper.review_record.v1.schema.json"],
+      "depends_on": ["corpus_core"],
+      "owns": ["paper.review-record@1 contract", "canonical review projection"]
+    },
+    "read_service": {
+      "paths": ["backend/app"],
+      "depends_on": ["corpus_core"],
+      "owns": ["paper read model", "HTTP API", "runtime diagnostics"]
+    },
+    "paper_derivations": {
+      "paths": ["backend/llm", "backend/experimental", "backend/exports/generate_summaries.py", "backend/exports/summary_artifacts.py", "backend/exports/build_summary_inputs.py"],
+      "depends_on": ["corpus_core", "read_service"],
+      "owns": ["paper-specific summaries", "derived analysis artifacts"]
+    },
+    "compatibility_surfaces": {
+      "paths": ["backend/exports/export_review_csv.py"],
+      "depends_on": ["read_service"],
+      "owns": ["legacy review CSV compatibility"]
+    },
+    "workbench": {
+      "paths": ["frontend"],
+      "depends_on": ["read_service"],
+      "owns": ["interactive paper workbench UX"]
+    }
+  },
+  "enforced_rules": {
+    "review_projection_forbidden_import_prefixes": [
+      "backend",
+      "chromadb",
+      "frontend",
+      "shared.chroma"
+    ],
+    "review_projection_forbidden_text": [
+      "abstract_scroller",
+      "snapshot_id",
+      "node_id"
+    ]
+  },
+  "notes": [
+    "Compatibility surfaces may retain historical dependencies while migration remains explicit.",
+    "Physical repository extraction is not implied by this manifest."
+  ]
+}

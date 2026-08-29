@@ -1,7 +1,14 @@
+"""Legacy/convenience CSV review projection.
+
+The preferred machine interface is producer-owned ``paper.review-record@1`` JSONL
+from ``pipeline.projections.review_records``. This module remains supported for
+existing CSV consumers and explicit compatibility workflows.
+"""
 from __future__ import annotations
 
 import argparse
 import csv
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -55,6 +62,7 @@ def _first_str(d: Dict[str, Any], *keys: str) -> str:
 
 
 def export_review_csv(out_path: Path, storage: Optional[StorageAdapter] = None) -> Path:
+    """Export the historical CSV projection without changing its field contract."""
     st = storage or create_adapter_from_env()
     if hasattr(st, "load_caches"):
         st.load_caches()
@@ -108,11 +116,21 @@ def _resolve_export_targets(
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="Export paper-kb papers to abstract-scroller-friendly CSV.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Export the legacy/convenience Paper KB review CSV. "
+            "For machine interoperability prefer pipeline.projections.review_records."
+        )
+    )
     parser.add_argument("--out", required=False, help="Output CSV path")
     parser.add_argument("--chunk-set-dir", required=False, help="Chunk set directory to export from")
     parser.add_argument("--corpus", required=False, help="Named corpus under corpora/<name>")
     args = parser.parse_args()
+
+    print(
+        "[paper-kb] compatibility CSV exporter: prefer paper.review-record@1 JSONL for new machine consumers",
+        file=sys.stderr,
+    )
 
     out_path, chunk_set_path = _resolve_export_targets(
         out_path=args.out,
