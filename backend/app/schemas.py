@@ -15,6 +15,7 @@ PageRange = Tuple[Optional[int], Optional[int]]
 # ------------------------------
 class PaperMeta(BaseModel):
     paper_id: str
+    paper_uid: Optional[str] = None
     title: str
     authors: Optional[List[str]] = None
     n_chunks: int
@@ -203,6 +204,7 @@ def canonical_paper_to_api(p: PaperMeta) -> Dict[str, Any]:
     """Return dict matching API PaperMeta shape (snake_case)."""
     return {
         "paper_id": p.paper_id,
+        "paper_uid": p.paper_uid,
         "title": p.title,
         "authors": p.authors,
         "n_chunks": p.n_chunks,
