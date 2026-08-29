@@ -1,0 +1,25 @@
+name: P2 canonical paper review projection
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/p2-canonical-review-record-projection
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile projection modules
+        run: python -m compileall -q pipeline/contracts pipeline/projections pipeline/writers
+      - name: Validate review contract
+        run: python tests/test_review_record_contract.py
+      - name: Prove canonical review projection
+        run: python tests/test_review_record_projection.py
