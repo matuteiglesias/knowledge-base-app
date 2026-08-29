@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "paper.catalog-record@1",
+  "title": "paper.catalog-record@1",
+  "type": "object",
+  "required": ["schema_id", "schema_version", "paper_uid", "title", "authors"],
+  "properties": {
+    "schema_id": {"type": "string", "const": "paper.catalog-record"},
+    "schema_version": {"type": "integer", "const": 1},
+    "paper_uid": {"type": "string", "minLength": 1},
+    "paper_id": {"type": ["string", "null"]},
+    "title": {"type": "string", "minLength": 1},
+    "authors": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "abstract": {"type": ["string", "null"]},
+    "date": {"type": ["string", "null"]},
+    "year": {"type": ["integer", "null"]},
+    "venue": {"type": ["string", "null"]},
+    "doi": {"type": ["string", "null"]},
+    "arxiv_id": {"type": ["string", "null"]},
+    "repec_id": {"type": ["string", "null"]},
+    "tags": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "source_url": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

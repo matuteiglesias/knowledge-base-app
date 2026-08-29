@@ -1,0 +1,27 @@
+name: Paper catalog projection
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bounded contract dependency
+        run: python -m pip install jsonschema
+      - name: Compile projection modules
+        run: python -m compileall -q pipeline/contracts pipeline/projections pipeline/corpus.py
+      - name: Validate catalog contract and projection
+        run: make contract-catalog-record
+      - name: Preserve paper projection boundaries
+        run: make architecture-check

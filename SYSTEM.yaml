@@ -13,13 +13,14 @@ authority:
   owns:
   - paper source acquisition and parser adapters
   - canonical paper and chunk identity plus paper corpus production
-  - producer-owned paper-domain contracts and review projection semantics
+  - producer-owned paper-domain contracts and projection semantics
   - repository-local paper read service and paper-specific derivations
   - paper workbench implementation
   does_not_own:
   - shared interoperability contract authority
   - general knowledge inspection
   - review snapshot compilation or snapshot-reader semantics
+  - knowledge-experience composition or renderer semantics
   - evidence selection or promotion policy
   - estate routing or MCP access policy
 interfaces:
@@ -27,8 +28,10 @@ interfaces:
   produces:
   - artifact:kb.paper-chunk-set@1
   - artifact:paper.review-record@1
+  - artifact:paper.catalog-record@1
   declares:
   - contract:paper.review-record@1
+  - contract:paper.catalog-record@1
   compatibility:
   - format:review-csv
 upstream:
@@ -36,14 +39,17 @@ upstream:
 downstream:
 - repo.knowledge-inspect
 - repo.abstract-scroller
+- repo.knowledge-experiences
 canonical_commands:
 - make corpus-doctor CORPUS=tesislcd
 - make corpus-parse CORPUS=tesislcd
 - make corpus-validate CORPUS=tesislcd
 - make contract-review-record
+- make contract-catalog-record
 - make architecture-check
 - make read-model-identity
 - make export-review-records CORPUS=tesislcd
+- make export-catalog-records CORPUS=tesislcd
 - make api-corpus CORPUS=tesislcd PORT=9000
 compatibility_commands:
 - make export-review-csv CORPUS=tesislcd
@@ -54,8 +60,8 @@ generated_paths:
 architecture:
   manifest: docs/architecture/component-manifest.json
   enforcement:
-  - review projection cannot import backend, frontend, Chroma or consumer runtime concerns
-  - review projection cannot encode consumer-specific identity fields
+  - paper projections cannot import backend, frontend, Chroma or consumer runtime concerns
+  - paper projections cannot encode consumer-specific identity fields
   - paper-level read models preserve canonical paper_uid when present in governed corpus artifacts
 verification:
   status: bounded-interface-proofs
@@ -64,13 +70,15 @@ verification:
   proven:
   - paper-kb chunk_set validates in Knowledge Inspect through pinned W3 cross-repo CI
   - canonical paper.review-record@1 JSONL is projected directly from governed chunk_set artifacts
-  - canonical projection fails closed when paper_uid is absent or duplicated
+  - canonical paper.catalog-record@1 JSONL projects paper_uid/title/authors plus optional existing catalog metadata without inference
+  - canonical projections fail closed when paper_uid is absent or duplicated
   - Abstract Scroller consumes pinned canonical paper.review-record@1 output and preserves paper_uid across snapshot compilation
   - component ownership and high-value dependency direction are machine-readable and checked through AST-based architecture tests
   - ChunkSetStorageAdapter preserves canonical paper_uid through the paper-level read model and PaperMeta API model while retaining paper_id compatibility
   compatibility_proven:
   - legacy review CSV still compiles into Abstract Scroller through the retained compatibility proof
   unknowns:
+  - venue/series coverage is not guaranteed by the current TEI chunk_set producer; consumers must not infer working-paper series when absent
   - paper-specific summaries and LLM implementation remain a bounded derivation component; physical extraction is not yet justified by lifecycle or consumer evidence
   - the historical backend.exports.export_review_csv module path remains compatibility debt and should only move with an import-compatible wrapper
 maintenance:
