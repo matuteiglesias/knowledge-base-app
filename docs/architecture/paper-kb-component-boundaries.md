@@ -3,7 +3,9 @@
 Status: **current reference for repository-internal responsibilities**  
 Updated: 2026-08-29
 
-`paper-kb` is a **modular monorepo**, not one undifferentiated application and not yet a set of repositories to split apart. Folder names are implementation locations; authority follows the component boundaries and contracts below.
+`paper-kb` is a **modular monorepo**, not one undifferentiated application and not yet a set of repositories to split apart. Folder names are implementation locations; authority follows the component boundaries, contracts and executable checks below.
+
+The machine-readable companion to this document is `docs/architecture/component-manifest.json`.
 
 ## Governing rule
 
@@ -58,21 +60,23 @@ Current implementation includes `backend/app/`, especially `storage_adapter.py`,
 
 Owns the repository-local read/query model, HTTP behavior, diagnostics and workbench compatibility adapters.
 
-Does not own source acquisition, canonical corpus production, or paper identity semantics independently from the corpus core. The service should consume canonical corpus artifacts and preserve corpus identity rather than minting a competing identity layer.
+Does not own source acquisition, canonical corpus production, or paper identity semantics independently from the corpus core. The service consumes canonical corpus artifacts and should preserve corpus identity rather than mint a competing identity layer.
 
-Known P5 debt: the current chunk-set read model does not consistently elevate `paper_uid` to paper-level API objects even though the source artifact preserves it.
+**P5 identity guarantee:** when a governed chunk-set carries `paper_uid`, `ChunkSetStorageAdapter` preserves it at chunk and paper level and the `PaperMeta` API model exposes it. Existing `paper_id` remains available for compatibility and route stability. `make read-model-identity` provides a synthetic end-to-end proof of this invariant.
 
 ### 4. Paper-specific derivations
 
-Current implementation includes `backend/exports/generate_summaries.py`, `backend/exports/summary_artifacts.py`, `backend/llm/` and experimental summary workflows.
+Current implementation includes `backend/exports/generate_summaries.py`, `backend/exports/summary_artifacts.py`, `backend/exports/build_summary_inputs.py`, `backend/llm/` and experimental summary workflows.
 
 Owns explicitly paper-specific derived summaries/analyses and their repository-local run semantics. A successful derivation never rewrites source corpus artifacts.
 
 Does not own corpus truth, general-purpose knowledge inspection, review projection semantics, or evidence promotion.
 
+P5 deliberately **fences rather than extracts** this component. Its current dependency/runtime profile is different from the corpus core, but there is not yet enough release-cadence or multi-consumer evidence to justify a separate repository. `backend/llm/OWNERSHIP.md` and `backend/exports/OWNERSHIP.md` make that boundary explicit while preserving current behavior.
+
 ### 5. Review projection
 
-Canonical implementation is `pipeline/projections/review_records.py`.
+Canonical implementation is `pipeline/projections/review_records.py`; ownership is declared in `pipeline/projections/OWNERSHIP.md`.
 
 Owns mapping governed paper corpus artifacts into bounded review-oriented domain records and producer-owned semantics of `paper.review-record@1`.
 
@@ -84,7 +88,7 @@ chunk_set artifacts
       -> paper.review-record@1 JSONL
 ```
 
-The projection is deterministic, validates every output record, requires canonical `paper_uid`, fails on duplicate identity, and does not depend on FastAPI, Chroma, the workbench, or Abstract Scroller internals.
+The projection is deterministic, validates every output record, requires canonical `paper_uid`, fails on duplicate identity, and does not depend on FastAPI, Chroma, the workbench, LLM derivations or Abstract Scroller internals.
 
 `backend/exports/export_review_csv.py` is a retained **compatibility surface**. Its CSV field layout is not domain authority. `make export-review-csv` is the explicit compatibility command; `make export-review` is a deprecated alias.
 
@@ -97,6 +101,19 @@ Current implementation is `frontend/` (Next.js).
 Owns interactive paper-workbench UX over the paper read service, frontend state and presentation behavior.
 
 Does not own corpus identity, parsing, review-record contracts or snapshot publication semantics.
+
+## Executable architecture — P5
+
+P5 converts the highest-value boundaries from prose into checked invariants.
+
+`docs/architecture/component-manifest.json` records component paths, dependency direction and ownership. `make architecture-check` performs dependency-light checks that:
+
+- every declared component path exists;
+- canonical review projection code does not import `backend`, frontend, Chroma or other reverse runtime concerns;
+- canonical review projection does not encode consumer-specific identity such as `node_id` or `snapshot_id`;
+- the historical CSV exporter is classified as compatibility rather than canonical projection authority.
+
+These checks are intentionally narrow. They protect the architecture that has real cross-repository consequences without freezing every internal import in a research-oriented monorepo.
 
 ## Dependency direction
 
@@ -115,8 +132,6 @@ Avoid reverse dependencies such as:
 - the API becoming the only source of corpus truth;
 - LLM summaries mutating canonical paper/chunk artifacts.
 
-P5 turns the most important of these rules into executable architecture checks.
-
 ## Public and compatibility seams
 
 Proven public seams:
@@ -131,9 +146,9 @@ Compatibility seam:
 
 ## Identity rule
 
-`paper_uid` is canonical paper identity for review interoperability. `paper_id` may be carried as a source/legacy identifier but does not replace `paper_uid` in the review contract.
+`paper_uid` is canonical paper identity for interoperability. `paper_id` remains a source/legacy identifier and a compatibility handle where existing API/routes require it.
 
-The review projection reads canonical corpus artifacts directly, so API/read-model identity loss is not an interoperability blocker. P5 should nevertheless repair the read model so API and workbench surfaces faithfully expose the same canonical identity.
+P2 made review interoperability independent of the read service by projecting directly from canonical corpus artifacts. P5 now closes the remaining internal consistency gap: the read/API plane also preserves `paper_uid`, so corpus core, review projection and workbench-facing read models can refer to the same canonical identity without breaking old `paper_id` consumers.
 
 ## When to split repositories
 
@@ -144,4 +159,4 @@ Do **not** split because directories are large. Physical extraction becomes just
 - materially different dependency/runtime requirements;
 - governance or rights boundaries that benefit from isolation.
 
-Until then, explicit component ownership, dependency tests and contract proofs are cheaper and safer than repository churn.
+P5 strengthens the modular-monorepo option precisely so a future extraction, if justified, becomes a small boundary-preserving operation rather than an architectural rescue.
