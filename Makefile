@@ -75,7 +75,7 @@ export-review:
 	$(MAKE) export-review-csv CORPUS=$(CORPUS)
 
 api-corpus:
-	python3 -c "import socket; s=socket(); s.settimeout(0.2); busy=(s.connect_ex(('127.0.0.1', int('$(PORT)')))==0); s.close(); import sys; sys.exit(1 if busy else 0)" || { echo "Port $(PORT) is occupied. Run: make kill-port PORT=$(PORT)"; exit 2; }
+	python3 -c "import socket; s=socket.socket(); s.settimeout(0.2); busy=(s.connect_ex(('127.0.0.1', int('$(PORT)')))==0); s.close(); import sys; sys.exit(1 if busy else 0)" || { echo "Port $(PORT) is occupied. Run: make kill-port PORT=$(PORT)"; exit 2; }
 	echo $(API_CORPUS_CMD)
 	$(API_CORPUS_CMD)
 
