@@ -56,24 +56,26 @@ def _normalize_pages(pages_raw) -> Optional[Tuple[Optional[int], Optional[int]]]
 
 def _ensure_chunk_shape(rec: Dict[str, Any]) -> Dict[str, Any]:
     out = {}
-    out["chunk_id"] = rec.get("chunk_id") or rec.get("id") or (rec.get("meta") or {}).get("chunk_id") or ""
-    out["paper_id"] = rec.get("paper_id") or (rec.get("meta") or {}).get("paper_id") or ""
+    meta = rec.get("meta") or rec.get("metadata") or {}
+    out["chunk_id"] = rec.get("chunk_id") or rec.get("id") or meta.get("chunk_id") or ""
+    out["paper_id"] = rec.get("paper_id") or meta.get("paper_id") or ""
+    out["paper_uid"] = rec.get("paper_uid") or meta.get("paper_uid") or None
     text = rec.get("text")
     if text is None:
-        text = rec.get("preview") or (rec.get("meta") or {}).get("preview") or ""
+        text = rec.get("preview") or meta.get("preview") or ""
     out["text"] = text or ""
     try:
-        out["chunk_index"] = int(rec.get("chunk_index") or (rec.get("meta") or {}).get("chunk_index") or 0)
+        out["chunk_index"] = int(rec.get("chunk_index") or meta.get("chunk_index") or 0)
     except Exception:
         out["chunk_index"] = 0
     try:
-        out["char_len"] = int(rec.get("char_len") or (rec.get("meta") or {}).get("char_len") or len(out["text"] or ""))
+        out["char_len"] = int(rec.get("char_len") or meta.get("char_len") or len(out["text"] or ""))
     except Exception:
         out["char_len"] = len(out["text"] or "")
-    out["header_path"] = rec.get("header_path") or (rec.get("meta") or {}).get("header_path")
-    out["source_file"] = rec.get("source_file") or (rec.get("meta") or {}).get("source_file")
-    out["pages"] = _normalize_pages(rec.get("pages") or (rec.get("meta") or {}).get("pages"))
-    out["meta"] = rec.get("meta") or rec.get("metadata") or {}
+    out["header_path"] = rec.get("header_path") or meta.get("header_path")
+    out["source_file"] = rec.get("source_file") or meta.get("source_file")
+    out["pages"] = _normalize_pages(rec.get("pages") or meta.get("pages"))
+    out["meta"] = meta
     out["_raw"] = rec
     return out
 
@@ -112,8 +114,10 @@ class ChunkSetStorageAdapter(StorageAdapter):
             if t:
                 preview = t[:240]
                 break
+        paper_uid = first.get("paper_uid") or meta.get("paper_uid")
         return {
             "paper_id": paper_id,
+            "paper_uid": paper_uid,
             "title": title,
             "authors": meta.get("authors") or [],
             "n_chunks": len(chunks),
@@ -130,6 +134,10 @@ class ChunkSetStorageAdapter(StorageAdapter):
     ) -> Dict[str, Any]:
         base = self._reconstruct_paper_meta(paper_id, chunks)
         pm = paper_meta if isinstance(paper_meta, dict) else {}
+
+        paper_uid = pm.get("paper_uid")
+        if isinstance(paper_uid, str) and paper_uid.strip():
+            base["paper_uid"] = paper_uid.strip()
 
         title = pm.get("title")
         if isinstance(title, str) and title.strip():
@@ -190,7 +198,7 @@ class ChunkSetStorageAdapter(StorageAdapter):
                 continue
             payload_paper_meta = payload.get("paper_meta")
             if isinstance(payload_paper_meta, dict):
-                payload_paper_id = payload_paper_meta.get("paper_id")
+                payload_paper_id = payload_paper_meta.get("paper_id") or payload_paper_meta.get("paper_uid")
                 if isinstance(payload_paper_id, str) and payload_paper_id.strip():
                     paper_meta_by_paper_id[payload_paper_id] = dict(payload_paper_meta)
             for ch in payload.get("chunks", []) or []:
@@ -301,6 +309,7 @@ class JsonlAdapter:
                         raw = json.loads(f.read_text(encoding="utf8"))
                         out.append({
                             "paper_id": raw.get("paper_id", f.stem),
+                            "paper_uid": raw.get("paper_uid"),
                             "title": raw.get("title", f.stem),
                             "n_chunks": raw.get("n_chunks", 0),
                             "metadata": raw
