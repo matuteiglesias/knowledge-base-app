@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 
 from pipeline.contracts.review_record import (
     ReviewRecordValidationError,
@@ -13,7 +17,6 @@ from pipeline.contracts.review_record import (
 from pipeline.identity import make_paper_uid
 from pipeline.writers.chunk_set_writer import write_chunk_set_artifact
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "contracts"
 
 
