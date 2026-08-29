@@ -13,7 +13,7 @@ VALIDATE_CMD = python3 -m pipeline.adapter.manager doctor --corpus $(CORPUS) --s
 EXPORT_REVIEW_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
 API_CORPUS_CMD = PAPER_KB_CORPUS=$(CORPUS) PAPER_KB_CHUNK_SETS_DIR=corpora/$(CORPUS)/chunk_sets STORAGE_BACKEND=chunk_set uvicorn backend.app.main:app --reload --port $(PORT)
 
-.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate api-corpus export-review frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
+.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record api-corpus export-review frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
 
 help:
 	@echo "Operator targets (run from repo root):"
@@ -21,6 +21,7 @@ help:
 	@echo "  make corpus-grobid CORPUS=tesislcd MAX_FILES=2"
 	@echo "  make corpus-parse CORPUS=tesislcd"
 	@echo "  make corpus-validate CORPUS=tesislcd"
+	@echo "  make contract-review-record"
 	@echo "  make api-corpus CORPUS=tesislcd PORT=9000"
 	@echo "  make export-review CORPUS=tesislcd"
 	@echo "  make frontend-dev"
@@ -43,6 +44,9 @@ corpus-parse:
 corpus-validate:
 	echo $(VALIDATE_CMD)
 	$(VALIDATE_CMD)
+
+contract-review-record:
+	python3 tests/test_review_record_contract.py
 
 api-corpus:
 	python3 -c "import socket; s=socket.socket(); s.settimeout(0.2); busy=(s.connect_ex(('127.0.0.1', int('$(PORT)')))==0); s.close(); import sys; sys.exit(1 if busy else 0)" || { echo "Port $(PORT) is occupied. Run: make kill-port PORT=$(PORT)"; exit 2; }

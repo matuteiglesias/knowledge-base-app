@@ -1,0 +1,45 @@
+name: paper-review-contract
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/**'
+      - 'pipeline/contracts/**'
+      - 'pipeline/identity.py'
+      - 'pipeline/writers/**'
+      - 'tests/test_review_record_contract.py'
+      - 'tests/fixtures/contracts/**'
+      - 'docs/architecture/paper-kb-component-boundaries.md'
+      - 'docs/contracts/paper-review-record.md'
+      - 'SYSTEM.yaml'
+      - 'Makefile'
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+      - 'pipeline/contracts/**'
+      - 'pipeline/identity.py'
+      - 'pipeline/writers/**'
+      - 'tests/test_review_record_contract.py'
+      - 'tests/fixtures/contracts/**'
+      - 'docs/architecture/paper-kb-component-boundaries.md'
+      - 'docs/contracts/paper-review-record.md'
+      - 'SYSTEM.yaml'
+      - 'Makefile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile contract module
+        run: python -m compileall -q pipeline/contracts
+      - name: Validate P1 review contract
+        run: make contract-review-record

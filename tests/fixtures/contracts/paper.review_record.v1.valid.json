@@ -1,0 +1,17 @@
+{
+  "schema_id": "paper.review-record",
+  "schema_version": 1,
+  "paper_uid": "paper_a1b2c3d4e5",
+  "paper_id": "source-paper-17",
+  "title": "Synthetic paper for contract validation",
+  "abstract": "Short synthetic abstract used only for contract testing.",
+  "date": "2026-01-15",
+  "year": 2026,
+  "venue": "Synthetic Review",
+  "doi": "10.0000/synthetic.17",
+  "arxiv_id": null,
+  "repec_id": null,
+  "tags": ["synthetic", "contract"],
+  "badges": [],
+  "source_url": "https://example.invalid/paper/17"
+}

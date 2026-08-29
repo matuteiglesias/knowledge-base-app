@@ -1,30 +1,33 @@
 # This file declares the repository boundary and its place in the GitHub estate.
 schema_version: 1
-id: kb.paper.corpus
+id: kb.paper.system
 repository:
   id: repo.paper-kb
   github: matuteiglesias/paper-kb
 domain: knowledge
 system: kb.paper
-role: paper-corpus-producer
+role: paper-knowledge-modular-monorepo
 lifecycle: active
 authority:
   status: proposed
   owns:
-  - paper ingestion and parsing
-  - paper-oriented chunks and review exports
-  - paper corpus APIs and structured summaries
+  - paper source acquisition and parser adapters
+  - canonical paper and chunk identity plus paper corpus production
+  - producer-owned paper-domain contracts and review projection semantics
+  - repository-local paper read service and paper-specific derivations
+  - paper workbench implementation
   does_not_own:
   - shared interoperability contract authority
-  - general chat knowledge ingestion
+  - general knowledge inspection
+  - review snapshot compilation or snapshot-reader semantics
+  - evidence selection or promotion policy
   - estate routing or MCP access policy
 interfaces:
-  consumes:
-  - contract:kb.chunk-set@1
-  - contract:kb.review-node@1
+  consumes: []
   produces:
   - artifact:kb.paper-chunk-set@1
-  - artifact:kb.review-node@1
+  declares:
+  - contract:paper.review-record@1
 upstream:
 - repo.kb-contracts
 downstream:
@@ -33,18 +36,24 @@ canonical_commands:
 - make corpus-doctor CORPUS=tesislcd
 - make corpus-parse CORPUS=tesislcd
 - make corpus-validate CORPUS=tesislcd
+- make contract-review-record
 - make export-review CORPUS=tesislcd
 - make api-corpus CORPUS=tesislcd PORT=9000
 generated_paths:
-- data/
+- corpora/
 - artifacts/
 verification:
-  status: metadata-only
+  status: bounded-interface-proofs
   last_verified: '2026-08-28'
-  command: make corpus-validate CORPUS=tesislcd
+  command: make contract-review-record
+  proven:
+  - paper-kb chunk_set validates in Knowledge Inspect through W3 cross-repo CI
+  expected_on_this_branch:
+  - paper.review-record@1 schema and sanitized fixtures validate offline
   unknowns:
-  - canonical commands were reconciled against the README operator surface but not executed during W2
-  - exact current contract adoption for every producer output remains an interface-proof task for W3
+  - canonical paper.review-record JSONL emission is P2 and does not exist yet
+  - Abstract Scroller consumption of paper.review-record is P3 and is not yet proven
+  - current ChunkSetStorageAdapter does not consistently elevate canonical paper_uid into its paper-level read model
 maintenance:
   cadence: quarterly
   next_review: '2026-11-01'
