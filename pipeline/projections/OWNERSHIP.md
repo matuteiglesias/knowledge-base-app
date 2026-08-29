@@ -1,4 +1,4 @@
-# Review projection ownership
+# Paper projection ownership
 
 This package is the Paper KB **paper-domain projection layer**.
 
@@ -8,8 +8,13 @@ It may consume governed corpus artifacts and producer-owned paper contracts. It 
 - FastAPI and frontend concerns;
 - Chroma or embedding stores;
 - LLM/summarization implementations;
-- Abstract Scroller or any other consumer-specific identity/snapshot semantics.
+- Abstract Scroller, Knowledge Experiences or any other consumer-specific identity/UI semantics.
 
-`review_records.py` is the canonical `chunk_set -> paper.review-record@1` projection.
+Canonical projections currently owned here:
 
-Compatibility formats may remain elsewhere while they are explicitly classified as legacy. New machine review semantics belong here only when they are producer-owned paper-domain semantics.
+- `review_records.py`: `chunk_set -> paper.review-record@1` for bounded review consumers;
+- `catalog_records.py`: `chunk_set -> paper.catalog-record@1` for bibliography/catalog consumers.
+
+These are sibling projections of the governed paper corpus. Neither is an export of backend runtime state and neither should absorb consumer-specific fields.
+
+Compatibility formats may remain elsewhere while explicitly classified as legacy.

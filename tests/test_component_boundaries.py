@@ -38,11 +38,10 @@ class ComponentBoundaryTest(unittest.TestCase):
                 with self.subTest(component=component, path=rel):
                     self.assertTrue((REPO_ROOT / rel).exists(), rel)
 
-    def test_review_projection_has_no_reverse_runtime_dependencies(self) -> None:
+    def test_paper_projections_have_no_reverse_runtime_dependencies(self) -> None:
         rules = self.manifest["enforced_rules"]
-        forbidden = tuple(rules["review_projection_forbidden_import_prefixes"])
-        projection = self.manifest["components"]["review_projection"]
-
+        forbidden = tuple(rules["paper_projections_forbidden_import_prefixes"])
+        projection = self.manifest["components"]["paper_projections"]
         violations: list[str] = []
         for rel in projection["paths"]:
             root = REPO_ROOT / rel
@@ -52,10 +51,10 @@ class ComponentBoundaryTest(unittest.TestCase):
                         violations.append(f"{path.relative_to(REPO_ROOT)} imports {imported}")
         self.assertEqual(violations, [])
 
-    def test_review_projection_does_not_encode_consumer_identity(self) -> None:
-        forbidden_text = self.manifest["enforced_rules"]["review_projection_forbidden_text"]
+    def test_paper_projections_do_not_encode_consumer_identity(self) -> None:
+        forbidden_text = self.manifest["enforced_rules"]["paper_projections_forbidden_text"]
         violations: list[str] = []
-        for rel in self.manifest["components"]["review_projection"]["paths"]:
+        for rel in self.manifest["components"]["paper_projections"]["paths"]:
             root = REPO_ROOT / rel
             for path in _python_files(root):
                 text = path.read_text(encoding="utf-8").lower()
@@ -64,8 +63,8 @@ class ComponentBoundaryTest(unittest.TestCase):
                         violations.append(f"{path.relative_to(REPO_ROOT)} contains {token}")
         self.assertEqual(violations, [])
 
-    def test_review_projection_is_not_owned_by_backend_exports(self) -> None:
-        projection_paths = set(self.manifest["components"]["review_projection"]["paths"])
+    def test_paper_projections_are_not_owned_by_backend_exports(self) -> None:
+        projection_paths = set(self.manifest["components"]["paper_projections"]["paths"])
         self.assertIn("pipeline/projections", projection_paths)
         self.assertNotIn("backend/exports", projection_paths)
         compatibility_paths = set(self.manifest["components"]["compatibility_surfaces"]["paths"])

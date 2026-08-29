@@ -13,12 +13,12 @@ class CorpusPaths:
     chunks: Path
     chunk_sets: Path
     review: Path
+    catalog: Path
 
     def ensure_dirs(self) -> "CorpusPaths":
-        for p in (self.root, self.pdfs, self.xmls, self.chunks, self.chunk_sets, self.review):
+        for p in (self.root, self.pdfs, self.xmls, self.chunks, self.chunk_sets, self.review, self.catalog):
             p.mkdir(parents=True, exist_ok=True)
         return self
-
 
 
 def resolve_corpus_paths(corpus_name: str, repo_root: Path | None = None) -> CorpusPaths:
@@ -36,4 +36,5 @@ def resolve_corpus_paths(corpus_name: str, repo_root: Path | None = None) -> Cor
         chunks=root / "chunks",
         chunk_sets=root / "chunk_sets",
         review=root / "review",
+        catalog=root / "catalog",
     )

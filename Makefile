@@ -11,10 +11,11 @@ GROBID_CMD = python3 -m pipeline.adapter.manager grobid --corpus $(CORPUS) --rec
 PARSE_CMD = python3 -m pipeline.adapter.manager parse --corpus $(CORPUS) --min-len $(MIN_LEN) $(if $(CHUNK_SET_DIR),--chunk-set-dir $(CHUNK_SET_DIR),)
 VALIDATE_CMD = python3 -m pipeline.adapter.manager doctor --corpus $(CORPUS) --strict --json
 EXPORT_REVIEW_RECORDS_CMD = python3 -m pipeline.projections.review_records --corpus $(CORPUS)
+EXPORT_CATALOG_RECORDS_CMD = python3 -m pipeline.projections.catalog_records --corpus $(CORPUS)
 EXPORT_REVIEW_CSV_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
 API_CORPUS_CMD = PAPER_KB_CORPUS=$(CORPUS) PAPER_KB_CHUNK_SETS_DIR=corpora/$(CORPUS)/chunk_sets STORAGE_BACKEND=chunk_set uvicorn backend.app.main:app --reload --port $(PORT)
 
-.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record architecture-check read-model-identity export-review-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
+.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record contract-catalog-record architecture-check read-model-identity export-review-records export-catalog-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
 
 help:
 	@echo "Operator targets (run from repo root):"
@@ -23,9 +24,11 @@ help:
 	@echo "  make corpus-parse CORPUS=tesislcd"
 	@echo "  make corpus-validate CORPUS=tesislcd"
 	@echo "  make contract-review-record"
+	@echo "  make contract-catalog-record"
 	@echo "  make architecture-check                    # executable modular-monorepo boundary rules"
 	@echo "  make read-model-identity                   # paper_uid survives chunk_set -> read/API model"
-	@echo "  make export-review-records CORPUS=tesislcd   # preferred machine interface: paper.review-record@1 JSONL"
+	@echo "  make export-review-records CORPUS=tesislcd  # review-oriented paper.review-record@1 JSONL"
+	@echo "  make export-catalog-records CORPUS=tesislcd # bibliography/catalog paper.catalog-record@1 JSONL"
 	@echo "  make api-corpus CORPUS=tesislcd PORT=9000"
 	@echo "  make frontend-dev"
 	@echo "  make kill-port PORT=9000"
@@ -55,6 +58,10 @@ corpus-validate:
 contract-review-record:
 	python3 tests/test_review_record_contract.py
 
+contract-catalog-record:
+	python3 tests/test_catalog_record_contract.py
+	python3 tests/test_catalog_record_projection.py
+
 architecture-check:
 	python3 tests/test_component_boundaries.py
 
@@ -65,8 +72,12 @@ export-review-records:
 	echo $(EXPORT_REVIEW_RECORDS_CMD)
 	$(EXPORT_REVIEW_RECORDS_CMD)
 
+export-catalog-records:
+	echo $(EXPORT_CATALOG_RECORDS_CMD)
+	$(EXPORT_CATALOG_RECORDS_CMD)
+
 export-review-csv:
-	@echo "[COMPATIBILITY] CSV review export; preferred machine interface is export-review-records."
+	@echo "[COMPATIBILITY] CSV review export; preferred review machine interface is export-review-records."
 	echo $(EXPORT_REVIEW_CSV_CMD)
 	$(EXPORT_REVIEW_CSV_CMD)
 

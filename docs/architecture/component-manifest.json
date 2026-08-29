@@ -13,10 +13,10 @@
       "depends_on": ["source_acquisition"],
       "owns": ["paper_uid", "chunk identity", "chunk_set production"]
     },
-    "review_projection": {
-      "paths": ["pipeline/contracts", "pipeline/projections", "contracts/paper.review_record.v1.schema.json"],
+    "paper_projections": {
+      "paths": ["pipeline/contracts", "pipeline/projections", "contracts/paper.review_record.v1.schema.json", "contracts/paper.catalog_record.v1.schema.json"],
       "depends_on": ["corpus_core"],
-      "owns": ["paper.review-record@1 contract", "canonical review projection"]
+      "owns": ["paper.review-record@1 contract", "paper.catalog-record@1 contract", "canonical paper-domain projections"]
     },
     "read_service": {
       "paths": ["backend/app"],
@@ -40,20 +40,12 @@
     }
   },
   "enforced_rules": {
-    "review_projection_forbidden_import_prefixes": [
-      "backend",
-      "chromadb",
-      "frontend",
-      "shared.chroma"
-    ],
-    "review_projection_forbidden_text": [
-      "abstract_scroller",
-      "snapshot_id",
-      "node_id"
-    ]
+    "paper_projections_forbidden_import_prefixes": ["backend", "chromadb", "frontend", "shared.chroma"],
+    "paper_projections_forbidden_text": ["abstract_scroller", "knowledge_experiences", "snapshot_id", "node_id"]
   },
   "notes": [
     "Compatibility surfaces may retain historical dependencies while migration remains explicit.",
-    "Physical repository extraction is not implied by this manifest."
+    "Physical repository extraction is not implied by this manifest.",
+    "The projection component generalized from review_projection only after a second concrete producer-owned catalog projection was required."
   ]
 }
