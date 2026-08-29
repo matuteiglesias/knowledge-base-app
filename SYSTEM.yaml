@@ -41,6 +41,8 @@ canonical_commands:
 - make corpus-parse CORPUS=tesislcd
 - make corpus-validate CORPUS=tesislcd
 - make contract-review-record
+- make architecture-check
+- make read-model-identity
 - make export-review-records CORPUS=tesislcd
 - make api-corpus CORPUS=tesislcd PORT=9000
 compatibility_commands:
@@ -49,19 +51,28 @@ compatibility_commands:
 generated_paths:
 - corpora/
 - artifacts/
+architecture:
+  manifest: docs/architecture/component-manifest.json
+  enforcement:
+  - review projection cannot import backend, frontend, Chroma or consumer runtime concerns
+  - review projection cannot encode consumer-specific identity fields
+  - paper-level read models preserve canonical paper_uid when present in governed corpus artifacts
 verification:
   status: bounded-interface-proofs
   last_verified: '2026-08-29'
-  command: make contract-review-record
+  command: make architecture-check
   proven:
   - paper-kb chunk_set validates in Knowledge Inspect through pinned W3 cross-repo CI
   - canonical paper.review-record@1 JSONL is projected directly from governed chunk_set artifacts
   - canonical projection fails closed when paper_uid is absent or duplicated
   - Abstract Scroller consumes pinned canonical paper.review-record@1 output and preserves paper_uid across snapshot compilation
+  - component ownership and high-value dependency direction are machine-readable and checked through AST-based architecture tests
+  - ChunkSetStorageAdapter preserves canonical paper_uid through the paper-level read model and PaperMeta API model while retaining paper_id compatibility
   compatibility_proven:
   - legacy review CSV still compiles into Abstract Scroller through the retained compatibility proof
   unknowns:
-  - current ChunkSetStorageAdapter does not consistently elevate canonical paper_uid into its paper-level read model; canonical review projection deliberately does not depend on that service layer
+  - paper-specific summaries and LLM implementation remain a bounded derivation component; physical extraction is not yet justified by lifecycle or consumer evidence
+  - the historical backend.exports.export_review_csv module path remains compatibility debt and should only move with an import-compatible wrapper
 maintenance:
   cadence: quarterly
   next_review: '2026-11-01'
