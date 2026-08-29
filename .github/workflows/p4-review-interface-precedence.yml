@@ -1,0 +1,27 @@
+name: P4 review interface precedence
+
+on:
+  pull_request:
+  push:
+    branches:
+      - governance/p4-review-interface-precedence
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile bounded review surfaces
+        run: python -m compileall -q pipeline/contracts pipeline/projections backend/exports
+      - name: Contract and projection regression
+        run: |
+          python tests/test_review_record_contract.py
+          python tests/test_review_record_projection.py
+      - name: Review surface governance
+        run: python tests/test_review_surface_governance.py
