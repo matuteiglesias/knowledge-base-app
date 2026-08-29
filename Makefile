@@ -77,7 +77,7 @@ export-catalog-records:
 	$(EXPORT_CATALOG_RECORDS_CMD)
 
 export-review-csv:
-	@echo "[COMPATIBILITY] CSV review export; preferred review machine interface is export-review-records."
+	@echo "[COMPATIBILITY] CSV review export; preferred machine interface for review is export-review-records."
 	echo $(EXPORT_REVIEW_CSV_CMD)
 	$(EXPORT_REVIEW_CSV_CMD)
 
