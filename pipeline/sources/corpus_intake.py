@@ -125,6 +125,41 @@ def _is_within(path: Path, parent: Path) -> bool:
         return False
 
 
+def _safe_empty_build_skeleton(cp: Any) -> bool:
+    """Recognize the harmless zero-record outputs produced by the old empty build path."""
+    if not cp.root.exists():
+        return True
+    files = [path for path in cp.root.rglob("*") if path.is_file()]
+    if not files:
+        return True
+
+    allowed_roots = (cp.review.resolve(), cp.catalog.resolve())
+    for path in files:
+        resolved = path.resolve()
+        if path.stat().st_size != 0:
+            return False
+        if not any(_is_within(resolved, root) for root in allowed_roots):
+            return False
+    return True
+
+
+def require_corpus_pdfs(*, corpus: str, repo_root: Path | None = None) -> dict[str, Any]:
+    """Fail closed before a build when the named corpus contains no PDF inputs."""
+    name = _validate_corpus_name(corpus)
+    cp = resolve_corpus_paths(name, repo_root=repo_root)
+    pdfs = (
+        sorted(path for path in cp.pdfs.rglob("*") if path.is_file() and path.suffix.lower() == ".pdf")
+        if cp.pdfs.exists()
+        else []
+    )
+    if not pdfs:
+        raise RuntimeError(
+            f"corpus '{name}' has 0 PDFs under {cp.pdfs}; register an input directory first with "
+            f"make corpus-register CORPUS={name} SOURCE_DIR=/path/to/pdfs"
+        )
+    return {"corpus_id": name, "pdf_count": len(pdfs), "pdf_dir": str(cp.pdfs)}
+
+
 def register_pdf_directory(
     *,
     corpus: str,
@@ -154,6 +189,7 @@ def register_pdf_directory(
 
     manifest_path = cp.root / "source-manifest.json"
     existing = _load_manifest(manifest_path)
+    safe_empty_skeleton = False
 
     if existing and existing.get("input_set_sha256") == input_set_sha256:
         if _verify_registered_pdfs(cp.pdfs, records):
@@ -177,8 +213,8 @@ def register_pdf_directory(
         )
 
     if not existing and cp.root.exists():
-        local_files = [path for path in cp.root.rglob("*") if path.is_file()]
-        if local_files and not replace:
+        safe_empty_skeleton = _safe_empty_build_skeleton(cp)
+        if not safe_empty_skeleton and not replace:
             raise RuntimeError(
                 f"corpus directory already contains local state without a matching source manifest: {cp.root}; use --replace only after review"
             )
@@ -192,9 +228,15 @@ def register_pdf_directory(
         "manifest_path": str(manifest_path),
         "registered_pdf_dir": str(cp.pdfs),
         "replace": bool(replace),
+        "recovered_empty_build_skeleton": bool(safe_empty_skeleton),
     }
     if dry_run:
         return result
+
+    if safe_empty_skeleton:
+        for generated_dir in (cp.xmls, cp.chunks, cp.chunk_sets, cp.review, cp.catalog):
+            if generated_dir.exists():
+                shutil.rmtree(generated_dir)
 
     cp.root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".pdf-intake-", dir=cp.root) as tmp:
@@ -244,12 +286,16 @@ def register_pdf_directory(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Register approved local PDF directories as governed Paper KB corpus inputs")
     sub = parser.add_subparsers(dest="command", required=True)
+
     register = sub.add_parser("register", help="inventory, hash and copy an existing PDF directory into a named corpus")
     register.add_argument("--corpus", required=True)
     register.add_argument("--source-dir", required=True)
     register.add_argument("--top-level-only", action="store_true", help="do not discover PDFs in nested directories")
     register.add_argument("--replace", action="store_true", help="replace an existing registration and clear stale downstream artifacts")
     register.add_argument("--dry-run", action="store_true", help="inspect the proposed registration without writing corpus state")
+
+    require = sub.add_parser("require-pdfs", help="fail unless a named corpus has at least one PDF input")
+    require.add_argument("--corpus", required=True)
     return parser.parse_args()
 
 
@@ -263,7 +309,11 @@ def main() -> None:
             replace=args.replace,
             dry_run=args.dry_run,
         )
-        print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    elif args.command == "require-pdfs":
+        result = require_corpus_pdfs(corpus=args.corpus)
+    else:  # pragma: no cover - argparse enforces known subcommands
+        raise RuntimeError(f"unsupported command: {args.command}")
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
