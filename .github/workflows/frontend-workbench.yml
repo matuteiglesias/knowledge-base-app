@@ -22,11 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Prove API and frontend ports are distinct
+      - name: Prove API/frontend ports and dev bundler
         run: |
           rendered="$(make -n frontend-dev PORT=9000 FRONTEND_PORT=3000)"
           echo "$rendered"
-          grep -F 'PORT=3000 NEXT_PUBLIC_API_BASE=http://127.0.0.1:9000 npm run dev' <<<"$rendered"
+          grep -F 'PORT=3000 NEXT_PUBLIC_API_BASE=http://127.0.0.1:9000 npm run dev -- --webpack' <<<"$rendered"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -35,8 +35,12 @@ jobs:
       - name: Install locked dependencies
         working-directory: frontend
         run: npm ci
-      - name: Prove Next distribution is complete
-        run: test -f frontend/node_modules/next/dist/lib/server-external-packages.jsonc
+      - name: Prove locked Next version resolves
+        working-directory: frontend
+        run: |
+          expected="$(node -p "require('./package-lock.json').packages['node_modules/next'].version")"
+          actual="$(node -p "require('./node_modules/next/package.json').version")"
+          test "$expected" = "$actual"
       - name: Lint
         working-directory: frontend
         run: npm run lint
