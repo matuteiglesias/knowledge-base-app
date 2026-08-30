@@ -35,6 +35,8 @@ jobs:
       - name: Install locked dependencies
         working-directory: frontend
         run: npm ci
+      - name: Prove Next distribution is complete
+        run: test -f frontend/node_modules/next/dist/lib/server-external-packages.jsonc
       - name: Lint
         working-directory: frontend
         run: npm run lint
