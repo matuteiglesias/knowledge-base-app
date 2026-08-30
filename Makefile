@@ -8,6 +8,7 @@ FIXTURE_LEVEL ?= metadata
 ALLOW_TEXT_DERIVATIVES ?=
 FIXTURE_REPLACE ?= $(REPLACE)
 PORT ?= 9000
+FRONTEND_PORT ?= 3000
 MAX_FILES ?=
 MIN_LEN ?= 50
 CHUNK_SET_DIR ?=
@@ -47,11 +48,12 @@ help:
 	@echo "  make export-review-records CORPUS=tesislcd  # review-oriented paper.review-record@1 JSONL"
 	@echo "  make export-catalog-records CORPUS=tesislcd # bibliography/catalog paper.catalog-record@1 JSONL"
 	@echo "  make api-corpus CORPUS=tesislcd PORT=9000"
-	@echo "  make frontend-dev"
+	@echo "  make frontend-dev PORT=9000 FRONTEND_PORT=3000 # API port 9000, Next workbench port 3000"
 	@echo "  make kill-port PORT=9000"
 	@echo ""
 	@echo "Registration flags: REPLACE=1 replaces an existing input snapshot and clears stale derived outputs; TOP_LEVEL_ONLY=1 disables recursive PDF discovery."
 	@echo "Fixture flags: FIXTURE_LEVEL=metadata|consumer; consumer requires ALLOW_TEXT_DERIVATIVES=1; REPLACE=1 replaces an existing fixture (FIXTURE_REPLACE=1 remains supported)."
+	@echo "Workbench ports: PORT selects the Paper KB API port; FRONTEND_PORT selects the Next dev-server port (default 3000)."
 	@echo "GROBID endpoint: set GROBID_URL to override the default http://localhost:8070/api/processFulltextDocument."
 	@echo ""
 	@echo "Compatibility targets:"
@@ -143,8 +145,9 @@ api-corpus:
 	$(API_CORPUS_CMD)
 
 frontend-dev:
-	echo "cd frontend && NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev"
-	cd frontend && NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev
+	python3 -c "import socket; s=socket.socket(); s.settimeout(0.2); busy=(s.connect_ex(('127.0.0.1', int('$(FRONTEND_PORT)')))==0); s.close(); import sys; sys.exit(1 if busy else 0)" || { echo "Frontend port $(FRONTEND_PORT) is occupied. Run: make kill-port PORT=$(FRONTEND_PORT)"; exit 2; }
+	echo "cd frontend && PORT=$(FRONTEND_PORT) NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev"
+	cd frontend && PORT=$(FRONTEND_PORT) NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev
 
 kill-port:
 	echo "Killing listeners on port $(PORT)"
