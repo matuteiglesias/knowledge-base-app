@@ -16,7 +16,13 @@ In another terminal:
 make frontend-dev PORT=9000
 ```
 
-The frontend defaults to `http://127.0.0.1:9000` and can be pointed at another compatible Paper KB API with `NEXT_PUBLIC_API_BASE`.
+`PORT` selects the Paper KB API port. The Next workbench uses `FRONTEND_PORT=3000` by default, so the command above connects the browser app on port 3000 to the API on port 9000. Override both explicitly when useful:
+
+```bash
+make frontend-dev PORT=9000 FRONTEND_PORT=3001
+```
+
+The frontend API base can also be pointed at another compatible Paper KB service with `NEXT_PUBLIC_API_BASE` when running Next directly.
 
 ## Workbench tabs
 
