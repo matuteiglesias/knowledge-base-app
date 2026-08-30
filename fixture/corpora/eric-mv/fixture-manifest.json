@@ -1,12 +1,47 @@
 {
   "absolute_paths_recorded": false,
   "catalog_record_files": 1,
-  "chunk_set_count": 0,
+  "chunk_set_count": 7,
   "copied_artifacts": [
     {
       "path": "catalog/paper.catalog-record.v1.jsonl",
       "sha256": "273a484b873d5ae6f9041b24e3c8b4906d23d0683b26941c95713665353f1b41",
       "size_bytes": 2766
+    },
+    {
+      "path": "chunk_sets/paper_tei_parse_1788054445_045abdfa.chunk_set.json",
+      "sha256": "50b5768ce71788329f472a6bb91e193bbce76089b860349761f95689f7a4dda3",
+      "size_bytes": 154008
+    },
+    {
+      "path": "chunk_sets/paper_tei_parse_1788054445_36a0a9e6.chunk_set.json",
+      "sha256": "480ab4922764cf85b8c9bd9fa7534946daf92a2c6b451adbfa4f52dd53c87f86",
+      "size_bytes": 93707
+    },
+    {
+      "path": "chunk_sets/paper_tei_parse_1788054445_a2af445c.chunk_set.json",
+      "sha256": "8a935af585895f6d8637f86011d26db1a4100973e768f590ea3506f9e3de9cb1",
+      "size_bytes": 120908
+    },
+    {
+      "path": "chunk_sets/paper_tei_parse_1788054445_f8f283b1.chunk_set.json",
+      "sha256": "c96baaeda5367bfb7b7195e62097a96b481166b9c8021cb232cc2eb8cca6ed2e",
+      "size_bytes": 137797
+    },
+    {
+      "path": "chunk_sets/paper_tei_parse_1788054446_29a0b981.chunk_set.json",
+      "sha256": "c686bca39189b9703ed2716dc1cbd2b9d729a061763bbff79a2a3efb3bf4bb0a",
+      "size_bytes": 82208
+    },
+    {
+      "path": "chunk_sets/paper_tei_parse_1788054446_3450cbb9.chunk_set.json",
+      "sha256": "141ebbbf5a56baf4f3760dcf374ac3c2442045a7ec9e0b06fc1e4f5e8523a2ff",
+      "size_bytes": 101359
+    },
+    {
+      "path": "chunk_sets/paper_tei_parse_1788054446_b0f3288f.chunk_set.json",
+      "sha256": "b13f7f06883bae9dda7cf87a696d270d9f73775e4087eff5012742e91346cd46",
+      "size_bytes": 145856
     },
     {
       "path": "review/paper.review-record.v1.jsonl",
@@ -15,7 +50,7 @@
     }
   ],
   "corpus_id": "eric-mv",
-  "fixture_level": "metadata",
+  "fixture_level": "consumer",
   "omitted": [
     "pdfs",
     "xmls",
@@ -23,7 +58,7 @@
     "runtime state"
   ],
   "review_record_files": 1,
-  "rights_note": "metadata fixture: source PDFs are represented only by filename/size/SHA-256",
+  "rights_note": "consumer fixture: canonical chunk_set text derivatives were included by explicit operator acknowledgement",
   "schema_id": "paper-kb.corpus-fixture-manifest",
   "schema_version": 1,
   "source_pdf_count": 7,
