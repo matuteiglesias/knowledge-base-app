@@ -1,131 +1,107 @@
-'use client'
-import React, { useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { API_BASE } from '@/lib/api'
-import { usePapers } from '@/hooks/usePapers'
-import { useCorpus } from '@/hooks/useCorpus'
-import ChunksCard from '@/components/containers/ChunksCard'
-import PaperSummaryCard from '@/components/containers/PaperSummaryCard'
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { API_BASE } from "@/lib/api";
+import { useCorpus } from "@/hooks/useCorpus";
+import { usePapers } from "@/hooks/usePapers";
+import { Badge } from "@/components/ui/badge";
+import { TAB_CATALOG, resolveWorkbenchProduct, type WorkbenchTabId } from "@/workbench/product";
+import { WORKBENCH_TAB_COMPONENTS } from "@/workbench/registry";
 
 export default function HomePage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const { data: papers, loading: papersLoading, error: papersError } = usePapers()
-  const { info, health, loading: corpusLoading, error: corpusError } = useCorpus()
-  const [q, setQ] = useState('')
-  const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null)
-
-  const filtered = useMemo(() => {
-    const list = papers ?? []
-    if (!q.trim()) return list
-    const qq = q.toLowerCase()
-    return list.filter((p) =>
-      [p.title, p.paperId, p.sourceFile, (p.authors || []).join(' ')].join(' ').toLowerCase().includes(qq)
-    )
-  }, [papers, q])
+  const product = useMemo(() => resolveWorkbenchProduct(), []);
+  const { data: papers, loading: papersLoading, error: papersError } = usePapers();
+  const { info, health, loading: corpusLoading, error: corpusError } = useCorpus();
+  const [activeTab, setActiveTab] = useState<WorkbenchTabId>(product.defaultTab);
+  const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
 
   useEffect(() => {
-    const fromUrl = searchParams.get('paper')
-    if (fromUrl && fromUrl !== selectedPaperId) {
-      setSelectedPaperId(fromUrl)
-      return
-    }
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = params.get("tab") as WorkbenchTabId | null;
+    const requestedPaper = params.get("paper");
+    if (requestedTab && product.tabs.includes(requestedTab)) setActiveTab(requestedTab);
+    if (requestedPaper) setSelectedPaperId(requestedPaper);
+  }, [product]);
 
-    if (!fromUrl && !selectedPaperId && filtered.length > 0) {
-      const first = filtered[0].paperId
-      setSelectedPaperId(first)
-      const params = new URLSearchParams(searchParams.toString())
-      params.set('paper', first)
-      router.replace(`/?${params.toString()}`)
-    }
-  }, [filtered, router, searchParams, selectedPaperId])
+  useEffect(() => {
+    if (!selectedPaperId && papers && papers.length > 0) setSelectedPaperId(papers[0].paperId);
+  }, [papers, selectedPaperId]);
 
+  const selectedPaper = useMemo(
+    () => (papers || []).find((paper) => paper.paperId === selectedPaperId) || null,
+    [papers, selectedPaperId]
+  );
 
-  const selected = filtered.find((p) => p.paperId === selectedPaperId) ?? null
+  const navigate = useCallback((tab: WorkbenchTabId, paperId?: string | null) => {
+    const nextTab = product.tabs.includes(tab) ? tab : product.defaultTab;
+    setActiveTab(nextTab);
+    if (paperId !== undefined) setSelectedPaperId(paperId);
 
-  const err = papersError || corpusError
-  const loading = papersLoading || corpusLoading
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", nextTab);
+    const resolvedPaper = paperId !== undefined ? paperId : selectedPaperId;
+    if (resolvedPaper) params.set("paper", resolvedPaper);
+    else params.delete("paper");
+    window.history.replaceState(null, "", `/?${params.toString()}`);
+  }, [product, selectedPaperId]);
 
-  const onSelectPaper = (paperId: string) => {
-    setSelectedPaperId(paperId)
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('paper', paperId)
-    router.replace(`/?${params.toString()}`)
-  }
-
-  const summaryBadge = (paperId: string) => {
-    const isSelected = paperId === selected?.paperId
-    const label = isSelected ? 'selected' : 'unknown'
-    return <span className="text-xs rounded bg-slate-100 text-slate-700 px-2 py-0.5">{label}</span>
-  }
+  const loading = papersLoading || corpusLoading;
+  const error = papersError || corpusError;
+  const ActiveTab = WORKBENCH_TAB_COMPONENTS[activeTab];
 
   return (
-    <main className="space-y-4">
-      <section className="border rounded p-3 bg-slate-50">
-        <div className="font-semibold">Paper Corpus Workbench</div>
-        <div className="text-sm mt-1">
-          <div>corpus: <strong>{info?.corpus_name || 'unknown'}</strong> · backend: <code>{API_BASE}</code></div>
-          <div>papers: {health?.n_papers ?? 0} · chunks: {health?.n_chunks ?? 0} · health: {health?.status || 'unknown'}</div>
-          <div className="text-slate-500">Diagnostics: <code>/health/*</code> · Dev sandbox: <code>/test</code> · API reference: <code>/api-docs</code></div>
-        </div>
-      </section>
-
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Paper Browser</h1>
-        <input className="border rounded px-3 py-2" placeholder="Filter title, author, source" value={q} onChange={e => setQ(e.target.value)} />
-      </div>
-
-      {loading && <div>Loading corpus…</div>}
-      {err && <div className="text-red-600">Could not reach backend at {API_BASE}. Check that the API is running.</div>}
-
-      {!loading && !err && filtered.length === 0 && (
-        <div className="border rounded p-4">No papers found in this corpus.</div>
-      )}
-
-      {!loading && !err && filtered.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border rounded p-2 overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left border-b">
-                  <th>Title</th><th>Chunks</th><th>Summary</th><th>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => {
-                  const isSelected = p.paperId === selected?.paperId
-                  return (
-                    <tr key={p.paperId} className={`border-b cursor-pointer hover:bg-slate-50 ${isSelected ? 'bg-slate-100' : ''}`} onClick={() => onSelectPaper(p.paperId)}>
-                      <td>{p.title || p.paperId}</td>
-                      <td>{p.nChunks}</td>
-                      <td>{summaryBadge()}</td>
-                      <td>{p.sourceFile || '—'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+    <main className="mx-auto min-h-screen max-w-[1500px] space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+      <header className="rounded-xl border bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{product.id}</div>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{product.label}</h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">{product.description}</p>
           </div>
-
-          <section className="space-y-4">
-            <div className="border rounded p-3">
-              <h2 className="font-semibold">Selected paper</h2>
-              {selected ? (
-                <div className="text-sm mt-1">
-                  <div className="font-medium">{selected.title || selected.paperId}</div>
-                  <div className="text-slate-600">{selected.nChunks} chunks · source: {selected.sourceFile || 'unknown'}</div>
-                  <div className="text-slate-500">paper_id: {selected.paperId}</div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-600 mt-1">Select a paper to inspect chunks and summaries.</p>
-              )}
-            </div>
-
-            <PaperSummaryCard paperId={selected?.paperId ?? null} />
-            <ChunksCard paperId={selected?.paperId ?? null} />
-          </section>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-2 text-sm sm:grid-cols-4">
+            <div><div className="text-xs text-slate-500">Corpus</div><div className="font-medium">{info?.corpus_name || "unknown"}</div></div>
+            <div><div className="text-xs text-slate-500">Papers</div><div className="font-medium">{health?.n_papers ?? papers?.length ?? "—"}</div></div>
+            <div><div className="text-xs text-slate-500">Chunks</div><div className="font-medium">{health?.n_chunks ?? "—"}</div></div>
+            <div><div className="text-xs text-slate-500">Health</div><Badge variant={health?.status === "ok" ? "secondary" : "outline"}>{health?.status || "unknown"}</Badge></div>
+          </div>
         </div>
-      )}
+
+        <nav className="mt-5 flex gap-1 overflow-x-auto border-t pt-3" aria-label="Workbench tabs">
+          {product.tabs.map((tabId) => {
+            const tab = TAB_CATALOG[tabId];
+            const active = tabId === activeTab;
+            return (
+              <button
+                key={tabId}
+                type="button"
+                onClick={() => navigate(tabId)}
+                className={`whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+                aria-current={active ? "page" : undefined}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mt-2 flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <span>{TAB_CATALOG[activeTab].description}</span>
+          <span className="font-mono">backend {API_BASE}</span>
+        </div>
+      </header>
+
+      {loading ? <div className="rounded border bg-white p-6 text-sm text-slate-500">Loading governed corpus…</div> : null}
+      {error ? <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Could not load the Paper KB read service: {String(error)}</div> : null}
+
+      {!loading && !error ? (
+        <ActiveTab
+          papers={papers || []}
+          selectedPaper={selectedPaper}
+          corpusInfo={info}
+          corpusHealth={health}
+          navigate={navigate}
+        />
+      ) : null}
     </main>
-  )
+  );
 }
