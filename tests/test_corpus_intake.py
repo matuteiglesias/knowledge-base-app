@@ -54,6 +54,21 @@ def test_same_registration_is_idempotent(tmp_path: Path):
     assert (repo / "corpora" / "papers" / "source-manifest.json").read_bytes() == manifest_before
 
 
+def test_input_identity_ignores_incidental_source_folder_layout(tmp_path: Path):
+    source_a = tmp_path / "incoming-a"
+    source_b = tmp_path / "incoming-b"
+    payload = b"%PDF-1.4\nsame-paper\n"
+    _pdf(source_a / "topic" / "paper.pdf", payload)
+    _pdf(source_b / "archive" / "deep" / "paper.pdf", payload)
+    repo = tmp_path / "repo"
+
+    first = register_pdf_directory(corpus="papers", source_dir=source_a, repo_root=repo)
+    second = register_pdf_directory(corpus="papers", source_dir=source_b, repo_root=repo)
+
+    assert second["status"] == "unchanged"
+    assert second["input_set_sha256"] == first["input_set_sha256"]
+
+
 def test_changed_input_fails_closed_without_replace_and_replace_clears_generated_state(tmp_path: Path):
     source = tmp_path / "incoming"
     _pdf(source / "paper.pdf", b"%PDF-1.4\nv1\n")
@@ -92,6 +107,15 @@ def test_registration_refuses_empty_or_unsafe_inputs(tmp_path: Path):
     _pdf(source / "paper.pdf", b"pdf")
     with pytest.raises(ValueError, match="corpus name"):
         register_pdf_directory(corpus="../escape", source_dir=source, repo_root=tmp_path / "repo")
+
+
+def test_source_dir_must_not_be_inside_target_corpus(tmp_path: Path):
+    repo = tmp_path / "repo"
+    source = repo / "corpora" / "papers" / "incoming"
+    _pdf(source / "paper.pdf", b"pdf")
+
+    with pytest.raises(ValueError, match="outside the target corpus directory"):
+        register_pdf_directory(corpus="papers", source_dir=source, repo_root=repo)
 
 
 def test_dry_run_writes_nothing(tmp_path: Path):
