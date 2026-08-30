@@ -48,3 +48,5 @@ jobs:
           make help | grep -F 'corpus-check-grobid'
           make help | grep -F 'corpus-build'
           make help | grep -F 'corpus-fixture'
+      - name: Check shared REPLACE flag reaches fixture promotion
+        run: make -n corpus-fixture CORPUS=demo REPLACE=1 | grep -F -- '--replace'
