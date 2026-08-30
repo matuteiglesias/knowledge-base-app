@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.sources.corpus_intake import discover_pdfs, register_pdf_directory
+from pipeline.sources.corpus_intake import discover_pdfs, register_pdf_directory, require_corpus_pdfs
 
 
 def _pdf(path: Path, payload: bytes) -> None:
@@ -67,6 +67,58 @@ def test_input_identity_ignores_incidental_source_folder_layout(tmp_path: Path):
 
     assert second["status"] == "unchanged"
     assert second["input_set_sha256"] == first["input_set_sha256"]
+
+
+def test_require_corpus_pdfs_fails_closed_for_empty_corpus(tmp_path: Path):
+    repo = tmp_path / "repo"
+    (repo / "corpora" / "papers" / "pdfs").mkdir(parents=True)
+
+    with pytest.raises(RuntimeError, match="has 0 PDFs"):
+        require_corpus_pdfs(corpus="papers", repo_root=repo)
+
+
+def test_require_corpus_pdfs_accepts_registered_inputs(tmp_path: Path):
+    source = tmp_path / "incoming"
+    _pdf(source / "paper.pdf", b"pdf")
+    repo = tmp_path / "repo"
+    register_pdf_directory(corpus="papers", source_dir=source, repo_root=repo)
+
+    result = require_corpus_pdfs(corpus="papers", repo_root=repo)
+
+    assert result["pdf_count"] == 1
+
+
+def test_registration_recovers_from_old_empty_build_skeleton(tmp_path: Path):
+    source = tmp_path / "incoming"
+    _pdf(source / "paper.pdf", b"%PDF-1.4\nreal-input\n")
+    repo = tmp_path / "repo"
+    corpus_root = repo / "corpora" / "papers"
+    (corpus_root / "pdfs").mkdir(parents=True)
+    (corpus_root / "xmls").mkdir()
+    (corpus_root / "chunks").mkdir()
+    (corpus_root / "chunk_sets").mkdir()
+    (corpus_root / "review").mkdir()
+    (corpus_root / "catalog").mkdir()
+    (corpus_root / "review" / "paper.review-record.v1.jsonl").write_bytes(b"")
+    (corpus_root / "catalog" / "paper.catalog-record.v1.jsonl").write_bytes(b"")
+
+    result = register_pdf_directory(corpus="papers", source_dir=source, repo_root=repo)
+
+    assert result["status"] == "registered"
+    assert result["recovered_empty_build_skeleton"] is True
+    assert (corpus_root / "pdfs" / "paper.pdf").read_bytes() == b"%PDF-1.4\nreal-input\n"
+
+
+def test_registration_still_refuses_meaningful_unmanaged_state(tmp_path: Path):
+    source = tmp_path / "incoming"
+    _pdf(source / "paper.pdf", b"pdf")
+    repo = tmp_path / "repo"
+    existing = repo / "corpora" / "papers" / "review" / "manual-note.txt"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("keep me", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="already contains local state"):
+        register_pdf_directory(corpus="papers", source_dir=source, repo_root=repo)
 
 
 def test_changed_input_fails_closed_without_replace_and_replace_clears_generated_state(tmp_path: Path):
