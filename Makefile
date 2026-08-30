@@ -1,6 +1,9 @@
 SHELL := /bin/bash
 
 CORPUS ?= tesislcd
+SOURCE_DIR ?=
+REPLACE ?=
+TOP_LEVEL_ONLY ?=
 PORT ?= 9000
 MAX_FILES ?=
 MIN_LEN ?= 50
@@ -10,15 +13,19 @@ DOCTOR_CMD = python3 -m pipeline.adapter.manager doctor --corpus $(CORPUS)
 GROBID_CMD = python3 -m pipeline.adapter.manager grobid --corpus $(CORPUS) --recursive $(if $(MAX_FILES),--max-files $(MAX_FILES),)
 PARSE_CMD = python3 -m pipeline.adapter.manager parse --corpus $(CORPUS) --min-len $(MIN_LEN) $(if $(CHUNK_SET_DIR),--chunk-set-dir $(CHUNK_SET_DIR),)
 VALIDATE_CMD = python3 -m pipeline.adapter.manager doctor --corpus $(CORPUS) --strict --json
+REGISTER_CMD = python3 -m pipeline.sources.corpus_intake register --corpus $(CORPUS) --source-dir "$(SOURCE_DIR)" $(if $(REPLACE),--replace,) $(if $(TOP_LEVEL_ONLY),--top-level-only,)
 EXPORT_REVIEW_RECORDS_CMD = python3 -m pipeline.projections.review_records --corpus $(CORPUS)
 EXPORT_CATALOG_RECORDS_CMD = python3 -m pipeline.projections.catalog_records --corpus $(CORPUS)
 EXPORT_REVIEW_CSV_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
 API_CORPUS_CMD = PAPER_KB_CORPUS=$(CORPUS) PAPER_KB_CHUNK_SETS_DIR=corpora/$(CORPUS)/chunk_sets STORAGE_BACKEND=chunk_set uvicorn backend.app.main:app --reload --port $(PORT)
 
-.PHONY: help corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record contract-catalog-record architecture-check read-model-identity export-review-records export-catalog-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
+.PHONY: help corpus-register corpus-register-dry-run corpus-build corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record contract-catalog-record architecture-check read-model-identity export-review-records export-catalog-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
 
 help:
 	@echo "Operator targets (run from repo root):"
+	@echo "  make corpus-register CORPUS=my-corpus SOURCE_DIR=/path/to/pdfs"
+	@echo "  make corpus-register-dry-run CORPUS=my-corpus SOURCE_DIR=/path/to/pdfs"
+	@echo "  make corpus-build CORPUS=my-corpus              # full GROBID -> chunk_set -> projections"
 	@echo "  make corpus-doctor CORPUS=tesislcd"
 	@echo "  make corpus-grobid CORPUS=tesislcd MAX_FILES=2"
 	@echo "  make corpus-parse CORPUS=tesislcd"
@@ -33,11 +40,31 @@ help:
 	@echo "  make frontend-dev"
 	@echo "  make kill-port PORT=9000"
 	@echo ""
+	@echo "Registration flags: REPLACE=1 replaces an existing input snapshot and clears stale derived outputs; TOP_LEVEL_ONLY=1 disables recursive PDF discovery."
+	@echo ""
 	@echo "Compatibility targets:"
 	@echo "  make export-review-csv CORPUS=tesislcd       # legacy/convenience CSV"
 	@echo "  make export-review CORPUS=tesislcd           # deprecated alias for export-review-csv"
 	@echo ""
 	@echo "Legacy placeholders retained as explicit legacy-* targets."
+
+corpus-register:
+	@test -n "$(SOURCE_DIR)" || { echo "SOURCE_DIR is required"; exit 2; }
+	echo $(REGISTER_CMD)
+	$(REGISTER_CMD)
+
+corpus-register-dry-run:
+	@test -n "$(SOURCE_DIR)" || { echo "SOURCE_DIR is required"; exit 2; }
+	echo $(REGISTER_CMD) --dry-run
+	$(REGISTER_CMD) --dry-run
+
+corpus-build:
+	$(MAKE) corpus-doctor CORPUS=$(CORPUS)
+	$(MAKE) corpus-grobid CORPUS=$(CORPUS) MAX_FILES=
+	$(MAKE) corpus-parse CORPUS=$(CORPUS)
+	$(MAKE) corpus-validate CORPUS=$(CORPUS)
+	$(MAKE) export-review-records CORPUS=$(CORPUS)
+	$(MAKE) export-catalog-records CORPUS=$(CORPUS)
 
 corpus-doctor:
 	echo $(DOCTOR_CMD)

@@ -28,6 +28,15 @@ pydoc/
 .pydoc.pid
 fixture/chroma_fallback/
 
+# --- governed local corpora: keep source-manifest.json reviewable, never raw/derived corpus bytes by default ---
+corpora/*/pdfs/
+corpora/*/xmls/
+corpora/*/chunks/
+corpora/*/chunk_sets/
+corpora/*/review/
+corpora/*/catalog/
+corpora/*/.pdf-intake-*/
+
 # --- local state / databases ---
 store/
 chroma_migrated/
@@ -41,4 +50,3 @@ chroma_migrated/
 
 # --- downloads (copyright + huge) ---
 downloads/
-
