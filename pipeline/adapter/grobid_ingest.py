@@ -39,7 +39,7 @@ def _short_hash(s: str, n: int = 8) -> str:
     return hashlib.sha1(s.encode("utf8")).hexdigest()[:n]
 
 
-def post_pdf_to_grobid(pdf_path: Path | str, timeout_seconds: int = 180, max_retries: int = 3, backoff: float = 1.0) -> str:
+def post_pdf_to_grobid(pdf_path: Path | str, timeout_seconds: int = 180, max_retries: int = 3, backoff: float = 1.0, consolidate_header: bool = True) -> str:
     """
     POST a PDF to a local Grobid instance and return TEI XML as str.
 
@@ -54,7 +54,7 @@ def post_pdf_to_grobid(pdf_path: Path | str, timeout_seconds: int = 180, max_ret
 
     data = {
         "generateIDs": "1",
-        "consolidateHeader": "1",
+        "consolidateHeader": "1" if consolidate_header else "0",
         "segmentSentences": "1",
         # request coordinates for head and sentences if GROBID supports
         "teiCoordinates": ["head", "s"],
@@ -142,7 +142,8 @@ def generate_teis_from_pdfs(pdf_dir: Path,
                             timeout: int = 180,
                             max_retries: int = 3,
                             max_files: Optional[int] = None,
-                            force: bool = False) -> Dict[str, Any]:
+                            force: bool = False,
+                            consolidate_header: bool = True) -> Dict[str, Any]:
     """
     POST PDFs to GROBID and write TEI files to out_tei_dir.
     Returns summary with successes and failures.
@@ -163,7 +164,7 @@ def generate_teis_from_pdfs(pdf_dir: Path,
         try:
             pdf_path = Path(pdf_path)
             logger.info("grobid: processing %s", pdf_path)
-            tei_text = post_pdf_to_grobid(pdf_path, timeout_seconds=timeout, max_retries=max_retries)
+            tei_text = post_pdf_to_grobid(pdf_path, timeout_seconds=timeout, max_retries=max_retries, consolidate_header=consolidate_header)
             # try to get title/paper_id from parsed TEI (pure parse)
             parsed = {}
             try:

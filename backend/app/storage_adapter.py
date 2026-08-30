@@ -155,6 +155,18 @@ class ChunkSetStorageAdapter(StorageAdapter):
         if isinstance(source_file, str) and source_file.strip():
             base["source_file"] = source_file.strip()
 
+        for field in ("abstract", "date", "venue", "doi", "arxiv_id"):
+            value = pm.get(field)
+            if isinstance(value, str) and value.strip():
+                base[field] = value.strip()
+            elif value is None:
+                base[field] = None
+
+        year = pm.get("year")
+        base["year"] = int(year) if isinstance(year, int) and not isinstance(year, bool) else None
+        tags = pm.get("tags")
+        base["tags"] = list(tags) if isinstance(tags, list) else []
+
         if not isinstance(base.get("authors"), list):
             base["authors"] = []
         return base

@@ -194,6 +194,13 @@ def make_paper_meta(title: str, paper_id: str, records: List[CanonicalChunk], ex
     pipeline_version = extra.get("pipeline_version") or _pipeline_version()
     embed_model = extra.get("embed_model") or None
     source_file = extra.get("source_file") or None
+    abstract = extra.get("abstract") or None
+    date = extra.get("date") or None
+    year = extra.get("year") or None
+    venue = extra.get("venue") or None
+    doi = extra.get("doi") or None
+    arxiv_id = extra.get("arxiv_id") or None
+    tags = extra.get("tags") or None
 
     # Build the PaperMeta model (pydantic will validate/coerce)
     pm = PaperMeta(
@@ -204,6 +211,13 @@ def make_paper_meta(title: str, paper_id: str, records: List[CanonicalChunk], ex
         preview=preview,
         pages=pages,
         source_file=source_file,
+        abstract=abstract,
+        date=date,
+        year=year,
+        venue=venue,
+        doi=doi,
+        arxiv_id=arxiv_id,
+        tags=tags,
         created_at=created_at,
         pipeline_version=pipeline_version,
         embed_model=embed_model,

@@ -27,9 +27,11 @@ def _hex10(value: str) -> str:
     return hashlib.sha1(value.encode("utf-8")).hexdigest()[:10]
 
 
-def make_paper_uid(*, doi: Optional[str] = None, source_file: Optional[str] = None, title: Optional[str] = None, fallback: Optional[str] = None) -> str:
+def make_paper_uid(*, doi: Optional[str] = None, arxiv_id: Optional[str] = None, source_file: Optional[str] = None, title: Optional[str] = None, fallback: Optional[str] = None) -> str:
     if doi and doi.strip():
         seed = f"doi:{doi.strip().lower()}"
+    elif arxiv_id and arxiv_id.strip():
+        seed = f"arxiv:{arxiv_id.strip().lower()}"
     elif source_file and str(source_file).strip():
         seed = f"source:{normalize_source_ref(source_file)}"
     elif title and title.strip():

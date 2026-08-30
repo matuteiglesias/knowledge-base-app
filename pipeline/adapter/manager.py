@@ -272,6 +272,7 @@ def _parse_args_and_run() -> None:
     g.add_argument("--max-retries", type=int, default=3)
     g.add_argument("--max-files", type=int, default=None)
     g.add_argument("--force", action="store_true")
+    g.add_argument("--no-consolidate-header", action="store_true", help="disable external header consolidation for reproducible/offline parsing")
 
     pr = sub.add_parser("parse", help="Parse TEIs to legacy chunks and canonical chunk_set artifacts")
     pr.add_argument("tei_dir", nargs="?")
@@ -304,6 +305,7 @@ def _parse_args_and_run() -> None:
     f.add_argument("--force", action="store_true")
     f.add_argument("--dry-run", action="store_true")
     f.add_argument("--chunk-set-dir", default=None)
+    f.add_argument("--no-consolidate-header", action="store_true", help="disable external header consolidation for reproducible/offline parsing")
 
     d = sub.add_parser("doctor", help="Check corpus readiness for parse/serve/browse")
     d.add_argument("--corpus", required=True)
@@ -343,6 +345,7 @@ def _parse_args_and_run() -> None:
             max_retries=args.max_retries,
             max_files=args.max_files,
             force=args.force,
+            consolidate_header=not args.no_consolidate_header,
         )
     elif args.cmd == "parse":
         runtime_paths = _resolve_runtime_paths(
@@ -382,7 +385,7 @@ def _parse_args_and_run() -> None:
             do_grobid=args.do_grobid,
             do_parse=args.do_parse,
             do_ingest=args.do_ingest,
-            grobid_opts={"recursive": True} if args.do_grobid else {},
+            grobid_opts={"recursive": True, "consolidate_header": not args.no_consolidate_header} if args.do_grobid else {},
             parse_opts={
                 "min_len": args.min_len,
                 "dry_run": args.dry_run,

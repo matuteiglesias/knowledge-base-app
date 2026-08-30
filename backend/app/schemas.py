@@ -22,6 +22,13 @@ class PaperMeta(BaseModel):
     preview: Optional[str] = None            # short text, capped at 2000 chars
     pages: Optional[int] = None              # total pages (paper-level)
     source_file: Optional[str] = None
+    abstract: Optional[str] = None
+    date: Optional[str] = None
+    year: Optional[int] = None
+    venue: Optional[str] = None
+    doi: Optional[str] = None
+    arxiv_id: Optional[str] = None
+    tags: Optional[List[str]] = None
     created_at: Optional[datetime] = None
     pipeline_version: Optional[str] = None   # e.g., git sha or pipeline tag
     embed_model: Optional[str] = None        # model used for embeddings (if any)
@@ -211,6 +218,13 @@ def canonical_paper_to_api(p: PaperMeta) -> Dict[str, Any]:
         "preview": p.preview,
         "pages": p.pages,
         "source_file": p.source_file,
+        "abstract": p.abstract,
+        "date": p.date,
+        "year": p.year,
+        "venue": p.venue,
+        "doi": p.doi,
+        "arxiv_id": p.arxiv_id,
+        "tags": p.tags,
         "created_at": p.created_at.isoformat() if isinstance(p.created_at, datetime) else p.created_at,
         "pipeline_version": p.pipeline_version,
         "embed_model": p.embed_model,

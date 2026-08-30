@@ -160,6 +160,7 @@ def parse_teis_to_chunks(
 
             paper_uid = make_paper_uid(
                 doi=parsed.get("doi"),
+                arxiv_id=parsed.get("arxiv_id"),
                 source_file=tei_path.name,
                 title=title,
                 fallback=tei_path.stem,
@@ -276,6 +277,13 @@ def parse_teis_to_chunks(
                         "title": title,
                         "display_title": title,
                         "authors": parsed.get("authors") if isinstance(parsed.get("authors"), list) else [],
+                        "abstract": parsed.get("abstract"),
+                        "date": parsed.get("date"),
+                        "year": parsed.get("year"),
+                        "venue": parsed.get("venue"),
+                        "doi": parsed.get("doi"),
+                        "arxiv_id": parsed.get("arxiv_id"),
+                        "tags": parsed.get("keywords") if isinstance(parsed.get("keywords"), list) else [],
                         "source_file": tei_path.name,
                         "source_ref": source_ref,
                         "artifact_key": artifact_key,
@@ -298,7 +306,7 @@ def parse_teis_to_chunks(
             # save paper-level metadata (coerce to dict appropriately)
             if not dry_run:
                 try:
-                    pm = make_paper_meta(title, paper_id, normalized_models, {"source_file": tei_path.name})
+                    pm = make_paper_meta(title, paper_id, normalized_models, {"source_file": tei_path.name, "authors": parsed.get("authors"), "abstract": parsed.get("abstract"), "date": parsed.get("date"), "year": parsed.get("year"), "venue": parsed.get("venue"), "doi": parsed.get("doi"), "arxiv_id": parsed.get("arxiv_id"), "tags": parsed.get("keywords")})
                     # prefer model_dump when available, fallback to dict for v1 compatibility
                     pm_payload = _to_mapping(pm)
                     save_paper_metadata_to_fs(pm_payload)
