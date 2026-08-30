@@ -79,6 +79,20 @@ def _file_records(source_dir: Path, pdfs: list[Path]) -> list[dict[str, Any]]:
     return records
 
 
+def _registered_input_identity(records: list[dict[str, Any]]) -> str:
+    """Hash the canonical registered corpus snapshot, not incidental local directory layout."""
+    identity_records = [
+        {
+            "registered_filename": record["registered_filename"],
+            "size_bytes": record["size_bytes"],
+            "sha256": record["sha256"],
+        }
+        for record in records
+    ]
+    identity_records.sort(key=lambda row: row["registered_filename"].casefold())
+    return _canonical_sha256(identity_records)
+
+
 def _load_manifest(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
@@ -136,7 +150,7 @@ def register_pdf_directory(
 
     pdfs = discover_pdfs(source_root, recursive=recursive)
     records = _file_records(source_root, pdfs)
-    input_set_sha256 = _canonical_sha256(records)
+    input_set_sha256 = _registered_input_identity(records)
 
     manifest_path = cp.root / "source-manifest.json"
     existing = _load_manifest(manifest_path)
