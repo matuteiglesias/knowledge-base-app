@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { API_BASE } from "@/lib/api";
 
 export default function ApiDocsPage() {
@@ -23,7 +24,7 @@ export default function ApiDocsPage() {
         <a className="rounded border bg-white p-4 text-sm font-medium hover:bg-slate-50" href={openapi} target="_blank" rel="noreferrer">OpenAPI JSON</a>
       </div>
 
-      <a className="text-sm text-sky-700 underline underline-offset-2" href="/?tab=corpus">Return to workbench</a>
+      <Link className="text-sm text-sky-700 underline underline-offset-2" href="/?tab=corpus">Return to workbench</Link>
     </main>
   );
 }
