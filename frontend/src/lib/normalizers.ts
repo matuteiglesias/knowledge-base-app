@@ -6,6 +6,24 @@ export type RawChunkResponse = components["schemas"]["ChunkResponse"];
 export type RawPaperChunksResponse = components["schemas"]["PaperChunksResponse"];
 export type RawSearchHit = components["schemas"]["SearchHit"];
 
+type ExtendedRawPaperMeta = RawPaperMeta & {
+  paper_uid?: string | null;
+  abstract?: string | null;
+  date?: string | null;
+  year?: number | null;
+  venue?: string | null;
+  doi?: string | null;
+  arxiv_id?: string | null;
+  tags?: string[] | null;
+  created_at?: string | null;
+  pipeline_version?: string | null;
+  embed_model?: string | null;
+  status?: string | null;
+};
+
+type ExtendedRawChunk = RawChunkResponse & { paper_id?: string | null };
+type ExtendedPaperChunksResponse = RawPaperChunksResponse & { paper_id?: string | null };
+
 export type PaperMeta = {
   paperId: string;
   paperUid?: string | null;
@@ -45,34 +63,36 @@ export type PaperChunksNormalized = {
   chunks: Chunk[];
 };
 
-export function normalizePaperMeta(r: RawPaperMeta): PaperMeta {
+export function normalizePaperMeta(raw: RawPaperMeta): PaperMeta {
+  const r: ExtendedRawPaperMeta = raw;
   return {
     paperId: r.paper_id,
-    paperUid: (r as any).paper_uid ?? null,
+    paperUid: r.paper_uid ?? null,
     title: r.title,
     authors: Array.isArray(r.authors) ? r.authors : [],
     nChunks: r.n_chunks,
     preview: r.preview ?? null,
     pages: r.pages ?? null,
     sourceFile: r.source_file ?? null,
-    abstract: (r as any).abstract ?? null,
-    date: (r as any).date ?? null,
-    year: (r as any).year ?? null,
-    venue: (r as any).venue ?? null,
-    doi: (r as any).doi ?? null,
-    arxivId: (r as any).arxiv_id ?? null,
-    tags: Array.isArray((r as any).tags) ? (r as any).tags : [],
-    createdAt: (r as any).created_at ?? null,
-    pipelineVersion: (r as any).pipeline_version ?? null,
-    embedModel: (r as any).embed_model ?? null,
-    status: (r as any).status ?? null,
+    abstract: r.abstract ?? null,
+    date: r.date ?? null,
+    year: r.year ?? null,
+    venue: r.venue ?? null,
+    doi: r.doi ?? null,
+    arxivId: r.arxiv_id ?? null,
+    tags: Array.isArray(r.tags) ? r.tags : [],
+    createdAt: r.created_at ?? null,
+    pipelineVersion: r.pipeline_version ?? null,
+    embedModel: r.embed_model ?? null,
+    status: r.status ?? null,
   };
 }
 
-export function normalizeChunkResponse(r: RawChunkResponse, parentPaperId?: string): Chunk {
+export function normalizeChunkResponse(raw: RawChunkResponse, parentPaperId?: string): Chunk {
+  const r: ExtendedRawChunk = raw;
   return {
     id: r.chunk_id,
-    paperId: parentPaperId ?? (r as any).paper_id ?? undefined,
+    paperId: parentPaperId ?? r.paper_id ?? undefined,
     pos: typeof r.chunk_index === "number" ? r.chunk_index : 0,
     text: r.text ?? "",
     charLen: typeof r.char_len === "number" ? r.char_len : (r.text ? r.text.length : 0),
@@ -84,7 +104,7 @@ export function normalizeChunkResponse(r: RawChunkResponse, parentPaperId?: stri
 
 export function normalizePapersList(raw: RawPapersList): PaperMeta[] {
   if (!raw || !Array.isArray(raw.papers)) return [];
-  const mapped = raw.papers.map((p) => normalizePaperMeta(p));
+  const mapped = raw.papers.map((paper) => normalizePaperMeta(paper));
   mapped.sort((a, b) =>
     String(a.title || "").localeCompare(String(b.title || "")) ||
     a.paperId.localeCompare(b.paperId)
@@ -92,11 +112,12 @@ export function normalizePapersList(raw: RawPapersList): PaperMeta[] {
   return mapped;
 }
 
-export function normalizePaperChunksResp(r: RawPaperChunksResponse): PaperChunksNormalized {
-  const topPaperId = (r as any).paper_id ?? "";
+export function normalizePaperChunksResp(raw: RawPaperChunksResponse): PaperChunksNormalized {
+  const r: ExtendedPaperChunksResponse = raw;
+  const topPaperId = r.paper_id ?? "";
   const total = typeof r.total === "number" ? r.total : (Array.isArray(r.chunks) ? r.chunks.length : 0);
   const chunks: Chunk[] = Array.isArray(r.chunks)
-    ? r.chunks.map((c) => normalizeChunkResponse(c, topPaperId))
+    ? r.chunks.map((chunk) => normalizeChunkResponse(chunk, topPaperId))
     : [];
   return { paperId: topPaperId, total, chunks };
 }
