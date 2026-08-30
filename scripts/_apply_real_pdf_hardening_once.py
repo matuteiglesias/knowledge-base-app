@@ -1,0 +1,209 @@
+from pathlib import Path
+
+
+def replace(path, old, new, count=1):
+    p = Path(path)
+    text = p.read_text()
+    n = text.count(old)
+    if n != count:
+        raise SystemExit(f"{path}: expected {count} occurrences, got {n}: {old[:100]!r}")
+    p.write_text(text.replace(old, new, count))
+
+
+# GROBID: preserve historical default but allow an explicitly offline/reproducible header path.
+replace(
+    "pipeline/adapter/grobid_ingest.py",
+    "def post_pdf_to_grobid(pdf_path: Path | str, timeout_seconds: int = 180, max_retries: int = 3, backoff: float = 1.0) -> str:",
+    "def post_pdf_to_grobid(pdf_path: Path | str, timeout_seconds: int = 180, max_retries: int = 3, backoff: float = 1.0, consolidate_header: bool = True) -> str:",
+)
+replace(
+    "pipeline/adapter/grobid_ingest.py",
+    '        "consolidateHeader": "1",',
+    '        "consolidateHeader": "1" if consolidate_header else "0",',
+)
+replace(
+    "pipeline/adapter/grobid_ingest.py",
+    "                            max_files: Optional[int] = None,\n                            force: bool = False) -> Dict[str, Any]:",
+    "                            max_files: Optional[int] = None,\n                            force: bool = False,\n                            consolidate_header: bool = True) -> Dict[str, Any]:",
+)
+replace(
+    "pipeline/adapter/grobid_ingest.py",
+    "            tei_text = post_pdf_to_grobid(pdf_path, timeout_seconds=timeout, max_retries=max_retries)",
+    "            tei_text = post_pdf_to_grobid(pdf_path, timeout_seconds=timeout, max_retries=max_retries, consolidate_header=consolidate_header)",
+)
+
+# Manager exposes the policy without changing legacy callers.
+replace(
+    "pipeline/adapter/manager.py",
+    '    g.add_argument("--force", action="store_true")',
+    '    g.add_argument("--force", action="store_true")\n    g.add_argument("--no-consolidate-header", action="store_true", help="disable external header consolidation for reproducible/offline parsing")',
+)
+replace(
+    "pipeline/adapter/manager.py",
+    '    f.add_argument("--chunk-set-dir", default=None)',
+    '    f.add_argument("--chunk-set-dir", default=None)\n    f.add_argument("--no-consolidate-header", action="store_true", help="disable external header consolidation for reproducible/offline parsing")',
+)
+replace(
+    "pipeline/adapter/manager.py",
+    "            force=args.force,\n        )\n    elif args.cmd == \"parse\":",
+    "            force=args.force,\n            consolidate_header=not args.no_consolidate_header,\n        )\n    elif args.cmd == \"parse\":",
+)
+replace(
+    "pipeline/adapter/manager.py",
+    '            grobid_opts={"recursive": True} if args.do_grobid else {},',
+    '            grobid_opts={"recursive": True, "consolidate_header": not args.no_consolidate_header} if args.do_grobid else {},',
+)
+
+# TEI parser: preserve bibliographic metadata GROBID already produced.
+p = Path("pipeline/parsers/tei_parser.py")
+text = p.read_text()
+marker = "\n\ndef _assemble_chunk(xml_id: Optional[str],"
+addition = r'''
+
+def _normalized_text(node) -> Optional[str]:
+    if node is None:
+        return None
+    text = " ".join("".join(node.itertext()).split())
+    return text or None
+
+
+def _normalize_doi(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    value = value.strip()
+    value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value, flags=re.I)
+    value = re.sub(r"^doi:\s*", "", value, flags=re.I)
+    return value.strip() or None
+
+
+def _normalize_arxiv_id(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    value = value.strip()
+    match = re.search(r"(?:arxiv:\s*)?(\d{4}\.\d{4,5})(?:v\d+)?", value, flags=re.I)
+    if match:
+        return match.group(1)
+    value = re.sub(r"^arxiv:\s*", "", value, flags=re.I)
+    return value or None
+
+
+def extract_bibliographic_metadata_from_lxml(root) -> Dict[str, Any]:
+    def first_text(xpath: str) -> Optional[str]:
+        nodes = root.xpath(xpath, namespaces=NS)
+        if not nodes:
+            return None
+        value = nodes[0]
+        if isinstance(value, str):
+            value = " ".join(value.split())
+            return value or None
+        return _normalized_text(value)
+
+    doi = _normalize_doi(first_text('//tei:teiHeader//tei:idno[translate(@type,"doi","DOI")="DOI"]'))
+    arxiv_id = _normalize_arxiv_id(first_text('//tei:teiHeader//tei:idno[contains(translate(@type,"ARXIV","arxiv"),"arxiv")]'))
+    date = first_text('//tei:teiHeader//tei:sourceDesc//tei:date[@when]/@when') or first_text('//tei:teiHeader//tei:date[@when]/@when')
+    year = None
+    if date:
+        match = re.search(r"(?:^|\D)(\d{4})(?:\D|$)", date)
+        if match:
+            year = int(match.group(1))
+    abstract_nodes = root.xpath('//tei:teiHeader//tei:profileDesc//tei:abstract', namespaces=NS)
+    abstract = _normalized_text(abstract_nodes[0]) if abstract_nodes else None
+    venue = first_text('//tei:teiHeader//tei:sourceDesc//tei:monogr/tei:title')
+    keywords = []
+    for node in root.xpath('//tei:teiHeader//tei:keywords//tei:term', namespaces=NS):
+        value = _normalized_text(node)
+        if value and value not in keywords:
+            keywords.append(value)
+    return {
+        "doi": doi,
+        "arxiv_id": arxiv_id,
+        "date": date,
+        "year": year,
+        "abstract": abstract,
+        "venue": venue,
+        "keywords": keywords,
+    }
+'''
+if marker not in text:
+    raise SystemExit("tei parser insertion marker missing")
+text = text.replace(marker, addition + marker, 1)
+old = '''        title = extract_title_from_lxml(root)\n        authors = extract_authors_from_lxml(root)\n        chunks = walk_body_to_chunks_lxml(root, canonical_id_fn=canonical_id_fn)\n        paper_id = canonical_id_fn(title) if canonical_id_fn else (title or "paper")\n        return {"title": title, "authors": authors, "chunks": chunks, "paper_id": paper_id}'''
+new = '''        title = extract_title_from_lxml(root)\n        authors = extract_authors_from_lxml(root)\n        bibliographic = extract_bibliographic_metadata_from_lxml(root)\n        chunks = walk_body_to_chunks_lxml(root, canonical_id_fn=canonical_id_fn)\n        paper_id = canonical_id_fn(title) if canonical_id_fn else (title or "paper")\n        return {"title": title, "authors": authors, "chunks": chunks, "paper_id": paper_id, **bibliographic}'''
+if old not in text:
+    raise SystemExit("tei parser lxml return target missing")
+p.write_text(text.replace(old, new, 1))
+
+# Stable identity can use an explicit arXiv identifier when DOI is absent.
+replace(
+    "pipeline/identity.py",
+    'def make_paper_uid(*, doi: Optional[str] = None, source_file: Optional[str] = None, title: Optional[str] = None, fallback: Optional[str] = None) -> str:\n    if doi and doi.strip():\n        seed = f"doi:{doi.strip().lower()}"\n    elif source_file and str(source_file).strip():',
+    'def make_paper_uid(*, doi: Optional[str] = None, arxiv_id: Optional[str] = None, source_file: Optional[str] = None, title: Optional[str] = None, fallback: Optional[str] = None) -> str:\n    if doi and doi.strip():\n        seed = f"doi:{doi.strip().lower()}"\n    elif arxiv_id and arxiv_id.strip():\n        seed = f"arxiv:{arxiv_id.strip().lower()}"\n    elif source_file and str(source_file).strip():',
+)
+
+# Canonical chunk_set paper_meta receives extracted metadata rather than discarding it.
+replace(
+    "pipeline/producer/tei_runner.py",
+    '                doi=parsed.get("doi"),\n                source_file=tei_path.name,',
+    '                doi=parsed.get("doi"),\n                arxiv_id=parsed.get("arxiv_id"),\n                source_file=tei_path.name,',
+)
+replace(
+    "pipeline/producer/tei_runner.py",
+    '                        "authors": parsed.get("authors") if isinstance(parsed.get("authors"), list) else [],\n                        "source_file": tei_path.name,',
+    '                        "authors": parsed.get("authors") if isinstance(parsed.get("authors"), list) else [],\n                        "abstract": parsed.get("abstract"),\n                        "date": parsed.get("date"),\n                        "year": parsed.get("year"),\n                        "venue": parsed.get("venue"),\n                        "doi": parsed.get("doi"),\n                        "arxiv_id": parsed.get("arxiv_id"),\n                        "tags": parsed.get("keywords") if isinstance(parsed.get("keywords"), list) else [],\n                        "source_file": tei_path.name,',
+)
+replace(
+    "pipeline/producer/tei_runner.py",
+    '                    pm = make_paper_meta(title, paper_id, normalized_models, {"source_file": tei_path.name})',
+    '                    pm = make_paper_meta(title, paper_id, normalized_models, {"source_file": tei_path.name, "authors": parsed.get("authors"), "abstract": parsed.get("abstract"), "date": parsed.get("date"), "year": parsed.get("year"), "venue": parsed.get("venue"), "doi": parsed.get("doi"), "arxiv_id": parsed.get("arxiv_id"), "tags": parsed.get("keywords")})',
+)
+
+# Read model exposes the same additive metadata.
+replace(
+    "backend/app/schemas.py",
+    '    source_file: Optional[str] = None\n    created_at: Optional[datetime] = None',
+    '    source_file: Optional[str] = None\n    abstract: Optional[str] = None\n    date: Optional[str] = None\n    year: Optional[int] = None\n    venue: Optional[str] = None\n    doi: Optional[str] = None\n    arxiv_id: Optional[str] = None\n    tags: Optional[List[str]] = None\n    created_at: Optional[datetime] = None',
+)
+replace(
+    "backend/app/schemas.py",
+    '        "source_file": p.source_file,\n        "created_at":',
+    '        "source_file": p.source_file,\n        "abstract": p.abstract,\n        "date": p.date,\n        "year": p.year,\n        "venue": p.venue,\n        "doi": p.doi,\n        "arxiv_id": p.arxiv_id,\n        "tags": p.tags,\n        "created_at":',
+)
+
+replace(
+    "pipeline/parsers/canonicalize.py",
+    '    source_file = extra.get("source_file") or None\n\n    # Build the PaperMeta model',
+    '    source_file = extra.get("source_file") or None\n    abstract = extra.get("abstract") or None\n    date = extra.get("date") or None\n    year = extra.get("year") or None\n    venue = extra.get("venue") or None\n    doi = extra.get("doi") or None\n    arxiv_id = extra.get("arxiv_id") or None\n    tags = extra.get("tags") or None\n\n    # Build the PaperMeta model',
+)
+replace(
+    "pipeline/parsers/canonicalize.py",
+    '        source_file=source_file,\n        created_at=created_at,',
+    '        source_file=source_file,\n        abstract=abstract,\n        date=date,\n        year=year,\n        venue=venue,\n        doi=doi,\n        arxiv_id=arxiv_id,\n        tags=tags,\n        created_at=created_at,',
+)
+
+p = Path("backend/app/storage_adapter.py")
+text = p.read_text()
+marker = '''        source_file = pm.get("source_file")\n        if isinstance(source_file, str) and source_file.strip():\n            base["source_file"] = source_file.strip()\n\n        if not isinstance(base.get("authors"), list):'''
+replacement = '''        source_file = pm.get("source_file")\n        if isinstance(source_file, str) and source_file.strip():\n            base["source_file"] = source_file.strip()\n\n        for field in ("abstract", "date", "venue", "doi", "arxiv_id"):\n            value = pm.get(field)\n            if isinstance(value, str) and value.strip():\n                base[field] = value.strip()\n            elif value is None:\n                base[field] = None\n\n        year = pm.get("year")\n        base["year"] = int(year) if isinstance(year, int) and not isinstance(year, bool) else None\n        tags = pm.get("tags")\n        base["tags"] = list(tags) if isinstance(tags, list) else []\n\n        if not isinstance(base.get("authors"), list):'''
+if marker not in text:
+    raise SystemExit("storage adapter metadata target missing")
+p.write_text(text.replace(marker, replacement, 1))
+
+Path("requirements-pipeline.txt").write_text("requests>=2.31,<3\npython-dotenv>=1,<2\npydantic>=2,<3\nlxml>=5,<7\njsonschema>=4,<5\n")
+
+Path("tests/test_tei_bibliographic_metadata.py").write_text('''from pipeline.parsers.tei_parser import parse_tei_text\nfrom pipeline.identity import make_paper_uid\n\nTEI = """<TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader><fileDesc><titleStmt><title>Metadata Proof</title><author><persName><forename>Ada</forename><surname>Lovelace</surname></persName></author></titleStmt><publicationStmt><date when="2024-01-04"/></publicationStmt><sourceDesc><biblStruct><analytic><idno type="arXiv">arXiv:2401.02013v1[cs.LG]</idno></analytic></biblStruct></sourceDesc></fileDesc><profileDesc><abstract><p>A structured abstract.</p></abstract><textClass><keywords><term>tabular learning</term></keywords></textClass></profileDesc></teiHeader><text><body><div><head>Intro</head><p>Long enough paragraph content for a parser test that exercises one canonical body chunk.</p></div></body></text></TEI>"""\n\ndef test_parser_preserves_grobid_bibliographic_metadata():\n    parsed = parse_tei_text(TEI)\n    assert parsed["title"] == "Metadata Proof"\n    assert parsed["authors"] == ["Ada Lovelace"]\n    assert parsed["arxiv_id"] == "2401.02013"\n    assert parsed["date"] == "2024-01-04"\n    assert parsed["year"] == 2024\n    assert parsed["abstract"] == "A structured abstract."\n    assert parsed["keywords"] == ["tabular learning"]\n\ndef test_arxiv_identity_is_stable_across_source_filenames():\n    left = make_paper_uid(arxiv_id="2401.02013", source_file="first.tei.xml", title="Metadata Proof")\n    right = make_paper_uid(arxiv_id="2401.02013", source_file="renamed.tei.xml", title="Metadata Proof")\n    assert left == right\n''')
+
+Path("tests/test_grobid_consolidation_policy.py").write_text('''from pathlib import Path\nfrom unittest.mock import Mock, patch\nimport tempfile\n\nfrom pipeline.adapter.grobid_ingest import post_pdf_to_grobid\n\ndef _response():\n    r = Mock(); r.text = '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body/></text></TEI>'; r.raise_for_status = Mock(); return r\n\ndef test_grobid_can_disable_external_header_consolidation():\n    with tempfile.TemporaryDirectory() as td:\n        pdf = Path(td) / "paper.pdf"; pdf.write_bytes(b"%PDF-fixture")\n        with patch("pipeline.adapter.grobid_ingest.requests.post", return_value=_response()) as post:\n            post_pdf_to_grobid(pdf, consolidate_header=False)\n        assert post.call_args.kwargs["data"]["consolidateHeader"] == "0"\n\ndef test_grobid_legacy_default_keeps_consolidation_enabled():\n    with tempfile.TemporaryDirectory() as td:\n        pdf = Path(td) / "paper.pdf"; pdf.write_bytes(b"%PDF-fixture")\n        with patch("pipeline.adapter.grobid_ingest.requests.post", return_value=_response()) as post:\n            post_pdf_to_grobid(pdf)\n        assert post.call_args.kwargs["data"]["consolidateHeader"] == "1"\n''')
+
+p = Path("tests/test_read_model_identity.py")
+text = p.read_text()
+text = text.replace(
+    '                    "source_file": "paper.xml"\n                },',
+    '                    "source_file": "paper.xml",\n                    "abstract": "Governed abstract",\n                    "date": "2024-01-04",\n                    "year": 2024,\n                    "venue": "Example Venue",\n                    "arxiv_id": "2401.02013",\n                    "tags": ["proof"]\n                },',
+    1,
+)
+text = text.replace(
+    '            self.assertEqual(api_model.paper_uid, "doi:10.0000/p5.identity")\n\n            chunks =',
+    '            self.assertEqual(api_model.paper_uid, "doi:10.0000/p5.identity")\n            self.assertEqual(api_model.abstract, "Governed abstract")\n            self.assertEqual(api_model.year, 2024)\n            self.assertEqual(api_model.arxiv_id, "2401.02013")\n            self.assertEqual(api_model.tags, ["proof"])\n\n            chunks =',
+    1,
+)
+p.write_text(text)
