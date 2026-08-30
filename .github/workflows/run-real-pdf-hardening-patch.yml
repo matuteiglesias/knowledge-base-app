@@ -6,6 +6,7 @@ on:
       - real-use/real-pdf-end-to-end-proof
     paths:
       - scripts/_apply_real_pdf_hardening_once.py
+      - scripts/_repair_real_pdf_hardening_fixture.py
       - .github/workflows/run-real-pdf-hardening-patch.yml
 
 permissions:
@@ -23,7 +24,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply bounded source patch
-        run: python scripts/_apply_real_pdf_hardening_once.py
+        run: |
+          python scripts/_apply_real_pdf_hardening_once.py
+          python scripts/_repair_real_pdf_hardening_fixture.py
       - name: Validate bounded patch
         run: |
           python -m pip install -q -r requirements-pipeline.txt pytest fastapi
