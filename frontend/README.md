@@ -22,6 +22,12 @@ make frontend-dev PORT=9000
 make frontend-dev PORT=9000 FRONTEND_PORT=3001
 ```
 
+`frontend-dev` first runs a bounded dependency preflight. It records the current `package-lock.json` hash under the local `node_modules` tree and checks a required Next distribution sentinel. If the lock changed or the Next install is incomplete, it removes only derived frontend state (`frontend/node_modules` and `frontend/.next`) and restores dependencies with `npm ci` before starting Next. You can run the same preparation explicitly with:
+
+```bash
+make frontend-prepare
+```
+
 The frontend API base can also be pointed at another compatible Paper KB service with `NEXT_PUBLIC_API_BASE` when running Next directly.
 
 ## Workbench tabs
