@@ -88,7 +88,7 @@ export async function fetchPaperSummary(paperId: string, signal?: AbortSignal): 
 
 export async function generatePaperSummary(
   paperId: string,
-  body: SummaryGenerateRequest = { provider: "mock", force: false },
+  body: SummaryGenerateRequest = { provider: "agent-framework", force: false },
   signal?: AbortSignal
 ): Promise<PaperSummary> {
   return apiPost<PaperSummary>(`/api/papers/${encodeURIComponent(paperId)}/summary:generate`, body, { signal });
