@@ -10,13 +10,35 @@ import type {
 } from "@/api/types";
 import { apiGet, apiPost } from "@/lib/api";
 
+export type SearchHit = {
+  id: string;
+  text: string;
+  score?: number | null;
+  meta?: Record<string, unknown> | null;
+  chunk_id?: string | null;
+  paper_id?: string | null;
+};
+
+export type SearchResults = {
+  capability: string;
+  query: string;
+  k: number;
+  hits: SearchHit[];
+};
+
+type ApiValidationError = Error & {
+  status?: number;
+  body?: unknown;
+  validation?: HTTPValidationError;
+};
+
 async function typedGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   try {
     return await apiGet<T>(path, { signal });
-  } catch (err: any) {
-    if (err?.status === 422) {
-      const ve = (err?.body || {}) as HTTPValidationError;
-      (err as any).validation = ve;
+  } catch (error: unknown) {
+    const err = error as ApiValidationError;
+    if (err.status === 422) {
+      err.validation = (err.body || {}) as HTTPValidationError;
     }
     throw err;
   }
@@ -48,6 +70,17 @@ export async function fetchPaperChunks(
   return typedGet<PaperChunksResponse>(`/api/papers/${encodeURIComponent(paperId)}/chunks?${params}`, signal);
 }
 
+export async function searchPaperChunks(
+  q: string,
+  opts?: { k?: number; paperId?: string | null },
+  signal?: AbortSignal
+): Promise<SearchResults> {
+  return apiPost<SearchResults>(
+    "/api/search",
+    { q, k: opts?.k ?? 20, paper_id: opts?.paperId || null },
+    { signal }
+  );
+}
 
 export async function fetchPaperSummary(paperId: string, signal?: AbortSignal): Promise<PaperSummary> {
   return typedGet<PaperSummary>(`/api/papers/${encodeURIComponent(paperId)}/summary`, signal);
@@ -55,7 +88,7 @@ export async function fetchPaperSummary(paperId: string, signal?: AbortSignal): 
 
 export async function generatePaperSummary(
   paperId: string,
-  body: SummaryGenerateRequest = { provider: "mock", force: false },
+  body: SummaryGenerateRequest = { provider: "agent-framework", force: false },
   signal?: AbortSignal
 ): Promise<PaperSummary> {
   return apiPost<PaperSummary>(`/api/papers/${encodeURIComponent(paperId)}/summary:generate`, body, { signal });

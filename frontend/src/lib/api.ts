@@ -1,6 +1,6 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ||
-  process.env.NEXT_PUBLIC_API_URL || // compatibility fallback only
+  process.env.NEXT_PUBLIC_API_URL ||
   "http://127.0.0.1:9000";
 
 function joinUrl(base: string, path: string): string {
@@ -10,11 +10,11 @@ function joinUrl(base: string, path: string): string {
   return `${b}${p}`;
 }
 
-async function parseJsonSafe(res: Response): Promise<any> {
+async function parseJsonSafe(res: Response): Promise<unknown> {
   const txt = await res.text();
   if (!txt) return {};
   try {
-    return JSON.parse(txt);
+    return JSON.parse(txt) as unknown;
   } catch {
     throw new Error(`Invalid JSON response (${res.status}) from ${res.url}`);
   }

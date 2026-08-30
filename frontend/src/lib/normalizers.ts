@@ -1,76 +1,98 @@
-// src/api/schema.ts
-/* Raw re-exports from generator */
-import type { components } from "@/api/generated"; // adjust path if generated elsewhere
+import type { components } from "@/api/generated";
 
 export type RawPaperMeta = components["schemas"]["PaperMeta"];
 export type RawPapersList = components["schemas"]["PapersList"];
 export type RawChunkResponse = components["schemas"]["ChunkResponse"];
 export type RawPaperChunksResponse = components["schemas"]["PaperChunksResponse"];
 export type RawSearchHit = components["schemas"]["SearchHit"];
-/* etc */
 
-/* Frontend-friendly types (single, stable shapes used inside UI) */
+type ExtendedRawPaperMeta = RawPaperMeta & {
+  paper_uid?: string | null;
+  abstract?: string | null;
+  date?: string | null;
+  year?: number | null;
+  venue?: string | null;
+  doi?: string | null;
+  arxiv_id?: string | null;
+  tags?: string[] | null;
+  created_at?: string | null;
+  pipeline_version?: string | null;
+  embed_model?: string | null;
+  status?: string | null;
+};
+
+type ExtendedRawChunk = RawChunkResponse & { paper_id?: string | null };
+type ExtendedPaperChunksResponse = RawPaperChunksResponse & { paper_id?: string | null };
+
 export type PaperMeta = {
   paperId: string;
+  paperUid?: string | null;
   title: string;
-  authors: string[] | null;
+  authors: string[];
   nChunks: number;
   preview?: string | null;
   pages?: number | null;
   sourceFile?: string | null;
+  abstract?: string | null;
+  date?: string | null;
+  year?: number | null;
+  venue?: string | null;
+  doi?: string | null;
+  arxivId?: string | null;
+  tags: string[];
   createdAt?: string | null;
   pipelineVersion?: string | null;
   embedModel?: string | null;
-  year?: number | null;
-  venue?: string | null;
   status?: string | null;
 };
 
 export type Chunk = {
-  id: string;            // chunk_id
-  paperId?: string;      // present on parent response if needed
-  pos: number;           // chunk_index
+  id: string;
+  paperId?: string;
+  pos: number;
   text: string;
   charLen: number;
   headerPath?: string[] | null;
-  pages?: (number | null)[] | null; // normalize tuple -> array
+  pages?: (number | null)[] | null;
   meta?: Record<string, unknown> | null;
 };
 
-/* PaperChunksNormalized - shape returned by normalizePaperChunksResp */
 export type PaperChunksNormalized = {
   paperId: string;
   total: number;
   chunks: Chunk[];
 };
 
-
-/* Normalizers */
-
-/** Normalize a single raw PaperMeta -> UI PaperMeta */
-export function normalizePaperMeta(r: RawPaperMeta): PaperMeta {
+export function normalizePaperMeta(raw: RawPaperMeta): PaperMeta {
+  const r: ExtendedRawPaperMeta = raw;
   return {
     paperId: r.paper_id,
+    paperUid: r.paper_uid ?? null,
     title: r.title,
-    authors: r.authors ?? null,
+    authors: Array.isArray(r.authors) ? r.authors : [],
     nChunks: r.n_chunks,
     preview: r.preview ?? null,
     pages: r.pages ?? null,
     sourceFile: r.source_file ?? null,
-    createdAt: (r as any).created_at ?? null,
-    pipelineVersion: (r as any).pipeline_version ?? null,
-    embedModel: (r as any).embed_model ?? null,
-    year: (r as any).year ?? null,
-    venue: (r as any).venue ?? null,
-    status: (r as any).status ?? null,
+    abstract: r.abstract ?? null,
+    date: r.date ?? null,
+    year: r.year ?? null,
+    venue: r.venue ?? null,
+    doi: r.doi ?? null,
+    arxivId: r.arxiv_id ?? null,
+    tags: Array.isArray(r.tags) ? r.tags : [],
+    createdAt: r.created_at ?? null,
+    pipelineVersion: r.pipeline_version ?? null,
+    embedModel: r.embed_model ?? null,
+    status: r.status ?? null,
   };
 }
 
-/** Normalize a single raw ChunkResponse -> UI Chunk */
-export function normalizeChunkResponse(r: RawChunkResponse, parentPaperId?: string): Chunk {
+export function normalizeChunkResponse(raw: RawChunkResponse, parentPaperId?: string): Chunk {
+  const r: ExtendedRawChunk = raw;
   return {
     id: r.chunk_id,
-    paperId: parentPaperId ?? (r as any).paper_id ?? undefined,
+    paperId: parentPaperId ?? r.paper_id ?? undefined,
     pos: typeof r.chunk_index === "number" ? r.chunk_index : 0,
     text: r.text ?? "",
     charLen: typeof r.char_len === "number" ? r.char_len : (r.text ? r.text.length : 0),
@@ -80,32 +102,22 @@ export function normalizeChunkResponse(r: RawChunkResponse, parentPaperId?: stri
   };
 }
 
-/** Normalize the PapersList payload from the backend into an array of UI PaperMeta */
 export function normalizePapersList(raw: RawPapersList): PaperMeta[] {
-  if (!raw) {
-    console.warn("normalizePapersList called with falsy raw:", raw);
-    return [];
-  }
-  if (!Array.isArray(raw.papers)) {
-    console.warn("normalizePapersList: expected raw.papers array, got:", raw);
-    return [];
-  }
-  const mapped = raw.papers.map((p) => normalizePaperMeta(p));
-  // optional: stable sort by nChunks desc then title
-  mapped.sort((a, b) => (b.nChunks || 0) - (a.nChunks || 0) || String((a.title || "")).localeCompare(String((b.title || ""))));
+  if (!raw || !Array.isArray(raw.papers)) return [];
+  const mapped = raw.papers.map((paper) => normalizePaperMeta(paper));
+  mapped.sort((a, b) =>
+    String(a.title || "").localeCompare(String(b.title || "")) ||
+    a.paperId.localeCompare(b.paperId)
+  );
   return mapped;
 }
 
-/** Normalize the PaperChunksResponse payload into PaperChunksNormalized */
-export function normalizePaperChunksResp(r: RawPaperChunksResponse): PaperChunksNormalized {
-  const topPaperId = (r as any).paper_id ?? "";
+export function normalizePaperChunksResp(raw: RawPaperChunksResponse): PaperChunksNormalized {
+  const r: ExtendedPaperChunksResponse = raw;
+  const topPaperId = r.paper_id ?? "";
   const total = typeof r.total === "number" ? r.total : (Array.isArray(r.chunks) ? r.chunks.length : 0);
   const chunks: Chunk[] = Array.isArray(r.chunks)
-    ? r.chunks.map((c) => normalizeChunkResponse(c, topPaperId))
+    ? r.chunks.map((chunk) => normalizeChunkResponse(chunk, topPaperId))
     : [];
-  return {
-    paperId: topPaperId,
-    total,
-    chunks,
-  };
+  return { paperId: topPaperId, total, chunks };
 }
