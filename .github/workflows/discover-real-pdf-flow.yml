@@ -1,0 +1,91 @@
+name: Discover real PDF flow
+
+on:
+  push:
+    branches: [real-use/real-pdf-end-to-end-proof]
+    paths: ['.github/workflows/discover-real-pdf-flow.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      GROBID_URL: http://localhost:8070/api/processFulltextDocument
+      CHUNKS_DIR: /tmp/paper-kb-real-flow/legacy-chunks
+      PAPERS_DIR: /tmp/paper-kb-real-flow/papers
+      PAPER_KB_CHUNK_SETS_DIR: /tmp/paper-kb-real-flow/chunk-sets
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact approved PDF inputs
+        run: sha256sum -c fixture/real_samples/SHA256SUMS
+      - name: Install bounded parser dependencies
+        run: python -m pip install -q requests python-dotenv pydantic lxml jsonschema pytest fastapi
+      - name: Start pinned GROBID 0.9.0 CRF service
+        run: |
+          docker pull grobid/grobid:0.9.0-crf
+          docker run -d --name grobid --init --ulimit core=0 -p 8070:8070 -p 8071:8071 grobid/grobid:0.9.0-crf
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8070/api/isalive >/dev/null; then
+              echo 'GROBID is alive'
+              exit 0
+            fi
+            sleep 5
+          done
+          docker logs grobid
+          exit 1
+      - name: Process both PDFs to ephemeral TEI
+        run: |
+          mkdir -p /tmp/paper-kb-real-flow/tei /tmp/paper-kb-real-flow/legacy-chunks /tmp/paper-kb-real-flow/chunk-sets /tmp/paper-kb-real-flow/papers
+          python -m pipeline.adapter.manager grobid fixture/real_samples/raw /tmp/paper-kb-real-flow/tei --max-files 2 --timeout 300 --max-retries 2 --force | tee /tmp/grobid-summary.json
+          test "$(find /tmp/paper-kb-real-flow/tei -maxdepth 1 -type f -name '*.xml' | wc -l)" -eq 2
+      - name: Parse TEI to canonical chunk sets
+        run: |
+          python -m pipeline.adapter.manager parse /tmp/paper-kb-real-flow/tei /tmp/paper-kb-real-flow/legacy-chunks --chunk-set-dir /tmp/paper-kb-real-flow/chunk-sets --force | tee /tmp/parse-summary.json
+          test "$(find /tmp/paper-kb-real-flow/chunk-sets -maxdepth 1 -type f -name '*.chunk_set.json' | wc -l)" -eq 2
+      - name: Project canonical review and catalog records
+        run: |
+          python -m pipeline.projections.review_records --chunk-set-dir /tmp/paper-kb-real-flow/chunk-sets --out /tmp/paper-kb-real-flow/paper.review-record.v1.jsonl | tee /tmp/review-summary.json
+          python -m pipeline.projections.catalog_records --chunk-set-dir /tmp/paper-kb-real-flow/chunk-sets --out /tmp/paper-kb-real-flow/paper.catalog-record.v1.jsonl | tee /tmp/catalog-summary.json
+      - name: Report non-textual evidence only
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root=Path('/tmp/paper-kb-real-flow')
+          rows=[]
+          for path in sorted((root/'chunk-sets').glob('*.chunk_set.json')):
+              p=json.loads(path.read_text())
+              rows.append({
+                  'artifact': path.name,
+                  'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                  'paper_uid': p.get('paper_meta',{}).get('paper_uid'),
+                  'title': p.get('paper_meta',{}).get('title'),
+                  'authors_count': len(p.get('paper_meta',{}).get('authors') or []),
+                  'chunk_count': p.get('chunk_count'),
+                  'source_file': p.get('paper_meta',{}).get('source_file'),
+              })
+          review=[json.loads(x) for x in (root/'paper.review-record.v1.jsonl').read_text().splitlines() if x.strip()]
+          catalog=[json.loads(x) for x in (root/'paper.catalog-record.v1.jsonl').read_text().splitlines() if x.strip()]
+          report={
+              'grobid_image':'grobid/grobid:0.9.0-crf',
+              'tei_count':len(list((root/'tei').glob('*.xml'))),
+              'chunk_sets':rows,
+              'review_count':len(review),
+              'review_uids':[x['paper_uid'] for x in review],
+              'catalog_count':len(catalog),
+              'catalog_uids':[x['paper_uid'] for x in catalog],
+          }
+          print('REAL_PDF_FLOW_REPORT='+json.dumps(report,sort_keys=True))
+          PY
+      - name: Run relevant producer regressions
+        run: |
+          python -m pytest -q tests/test_identity_contract.py tests/test_chunk_set_writer_contract.py tests/test_tei_runner_chunk_set_validation.py tests/test_review_record_projection.py tests/test_catalog_record_projection.py tests/test_read_model_identity.py
+      - name: GROBID logs on failure
+        if: failure()
+        run: docker logs --tail 200 grobid || true
