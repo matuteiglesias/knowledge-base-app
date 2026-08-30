@@ -26,7 +26,7 @@ EXPORT_CATALOG_RECORDS_CMD = python3 -m pipeline.projections.catalog_records --c
 EXPORT_REVIEW_CSV_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
 API_CORPUS_CMD = PAPER_KB_CORPUS=$(CORPUS) PAPER_KB_CHUNK_SETS_DIR=corpora/$(CORPUS)/chunk_sets STORAGE_BACKEND=chunk_set uvicorn backend.app.main:app --reload --port $(PORT)
 
-.PHONY: help corpus-register corpus-register-dry-run corpus-check-input corpus-check-grobid corpus-build corpus-fixture corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record contract-catalog-record architecture-check read-model-identity export-review-records export-catalog-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
+.PHONY: help corpus-register corpus-register-dry-run corpus-check-input corpus-check-grobid corpus-build corpus-fixture corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record contract-catalog-record architecture-check read-model-identity export-review-records export-catalog-records export-review-csv export-review api-corpus frontend-prepare frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
 
 help:
 	@echo "Operator targets (run from repo root):"
@@ -48,6 +48,7 @@ help:
 	@echo "  make export-review-records CORPUS=tesislcd  # review-oriented paper.review-record@1 JSONL"
 	@echo "  make export-catalog-records CORPUS=tesislcd # bibliography/catalog paper.catalog-record@1 JSONL"
 	@echo "  make api-corpus CORPUS=tesislcd PORT=9000"
+	@echo "  make frontend-prepare                         # repair/refresh locked Next dependencies when needed"
 	@echo "  make frontend-dev PORT=9000 FRONTEND_PORT=3000 # API port 9000, Next workbench port 3000"
 	@echo "  make kill-port PORT=9000"
 	@echo ""
@@ -144,7 +145,23 @@ api-corpus:
 	echo $(API_CORPUS_CMD)
 	$(API_CORPUS_CMD)
 
-frontend-dev:
+frontend-prepare:
+	@set -euo pipefail; \
+	expected=$$(sha256sum frontend/package-lock.json | awk '{print $$1}'); \
+	actual=$$(cat frontend/node_modules/.paper-kb-package-lock.sha256 2>/dev/null || true); \
+	sentinel=frontend/node_modules/next/dist/lib/server-external-packages.jsonc; \
+	if [ "$$expected" = "$$actual" ] && [ -f "$$sentinel" ]; then \
+		echo "Frontend dependencies ready (locked install)."; \
+		exit 0; \
+	fi; \
+	echo "Refreshing frontend dependencies from package-lock.json"; \
+	rm -rf frontend/node_modules frontend/.next; \
+	cd frontend; \
+	npm ci; \
+	test -f node_modules/next/dist/lib/server-external-packages.jsonc || { echo "Next install is incomplete: missing dist/lib/server-external-packages.jsonc"; exit 2; }; \
+	printf '%s\n' "$$expected" > node_modules/.paper-kb-package-lock.sha256
+
+frontend-dev: frontend-prepare
 	python3 -c "import socket; s=socket.socket(); s.settimeout(0.2); busy=(s.connect_ex(('127.0.0.1', int('$(FRONTEND_PORT)')))==0); s.close(); import sys; sys.exit(1 if busy else 0)" || { echo "Frontend port $(FRONTEND_PORT) is occupied. Run: make kill-port PORT=$(FRONTEND_PORT)"; exit 2; }
 	echo "cd frontend && PORT=$(FRONTEND_PORT) NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev"
 	cd frontend && PORT=$(FRONTEND_PORT) NEXT_PUBLIC_API_BASE=http://127.0.0.1:$(PORT) npm run dev
