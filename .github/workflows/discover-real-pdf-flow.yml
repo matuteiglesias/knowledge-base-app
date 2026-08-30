@@ -1,10 +1,30 @@
-name: Discover real PDF flow
+name: Real PDF end-to-end proof
 
 on:
-  push:
-    branches: [real-use/real-pdf-end-to-end-proof]
-    paths: ['.github/workflows/discover-real-pdf-flow.yml']
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'fixture/real_samples/**'
+      - 'pipeline/**'
+      - 'backend/app/schemas.py'
+      - 'backend/app/storage_adapter.py'
+      - 'requirements-pipeline.txt'
+      - 'tests/test_tei_bibliographic_metadata.py'
+      - 'tests/test_grobid_consolidation_policy.py'
+      - 'tests/test_read_model_identity.py'
+      - '.github/workflows/discover-real-pdf-flow.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'fixture/real_samples/**'
+      - 'pipeline/**'
+      - 'backend/app/schemas.py'
+      - 'backend/app/storage_adapter.py'
+      - 'requirements-pipeline.txt'
+      - 'tests/test_tei_bibliographic_metadata.py'
+      - 'tests/test_grobid_consolidation_policy.py'
+      - 'tests/test_read_model_identity.py'
+      - '.github/workflows/discover-real-pdf-flow.yml'
 
 permissions:
   contents: read
