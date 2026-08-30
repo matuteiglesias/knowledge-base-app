@@ -4,6 +4,9 @@ CORPUS ?= tesislcd
 SOURCE_DIR ?=
 REPLACE ?=
 TOP_LEVEL_ONLY ?=
+FIXTURE_LEVEL ?= metadata
+ALLOW_TEXT_DERIVATIVES ?=
+FIXTURE_REPLACE ?=
 PORT ?= 9000
 MAX_FILES ?=
 MIN_LEN ?= 50
@@ -16,12 +19,13 @@ PARSE_CMD = python3 -m pipeline.adapter.manager parse --corpus $(CORPUS) --min-l
 VALIDATE_CMD = python3 -m pipeline.adapter.manager doctor --corpus $(CORPUS) --strict --json
 REGISTER_CMD = python3 -m pipeline.sources.corpus_intake register --corpus $(CORPUS) --source-dir "$(SOURCE_DIR)" $(if $(REPLACE),--replace,) $(if $(TOP_LEVEL_ONLY),--top-level-only,)
 REQUIRE_PDFS_CMD = python3 -m pipeline.sources.corpus_intake require-pdfs --corpus $(CORPUS)
+FIXTURE_CMD = python3 -m pipeline.sources.corpus_fixture --corpus $(CORPUS) --level $(FIXTURE_LEVEL) $(if $(ALLOW_TEXT_DERIVATIVES),--allow-text-derivatives,) $(if $(FIXTURE_REPLACE),--replace,)
 EXPORT_REVIEW_RECORDS_CMD = python3 -m pipeline.projections.review_records --corpus $(CORPUS)
 EXPORT_CATALOG_RECORDS_CMD = python3 -m pipeline.projections.catalog_records --corpus $(CORPUS)
 EXPORT_REVIEW_CSV_CMD = python3 -m backend.exports.export_review_csv --corpus $(CORPUS)
 API_CORPUS_CMD = PAPER_KB_CORPUS=$(CORPUS) PAPER_KB_CHUNK_SETS_DIR=corpora/$(CORPUS)/chunk_sets STORAGE_BACKEND=chunk_set uvicorn backend.app.main:app --reload --port $(PORT)
 
-.PHONY: help corpus-register corpus-register-dry-run corpus-check-input corpus-check-grobid corpus-build corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record contract-catalog-record architecture-check read-model-identity export-review-records export-catalog-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
+.PHONY: help corpus-register corpus-register-dry-run corpus-check-input corpus-check-grobid corpus-build corpus-fixture corpus-doctor corpus-grobid corpus-parse corpus-validate contract-review-record contract-catalog-record architecture-check read-model-identity export-review-records export-catalog-records export-review-csv export-review api-corpus frontend-dev kill-port legacy-smoke legacy-run-all legacy-run
 
 help:
 	@echo "Operator targets (run from repo root):"
@@ -30,6 +34,8 @@ help:
 	@echo "  make corpus-check-input CORPUS=my-corpus         # fail unless at least one PDF is present"
 	@echo "  make corpus-check-grobid                         # fail unless configured GROBID is reachable"
 	@echo "  make corpus-build CORPUS=my-corpus              # full GROBID -> chunk_set -> projections"
+	@echo "  make corpus-fixture CORPUS=my-corpus            # metadata-only repository fixture"
+	@echo "  make corpus-fixture CORPUS=my-corpus FIXTURE_LEVEL=consumer ALLOW_TEXT_DERIVATIVES=1"
 	@echo "  make corpus-doctor CORPUS=tesislcd"
 	@echo "  make corpus-grobid CORPUS=tesislcd MAX_FILES=2"
 	@echo "  make corpus-parse CORPUS=tesislcd"
@@ -45,6 +51,7 @@ help:
 	@echo "  make kill-port PORT=9000"
 	@echo ""
 	@echo "Registration flags: REPLACE=1 replaces an existing input snapshot and clears stale derived outputs; TOP_LEVEL_ONLY=1 disables recursive PDF discovery."
+	@echo "Fixture flags: FIXTURE_LEVEL=metadata|consumer; consumer requires ALLOW_TEXT_DERIVATIVES=1; FIXTURE_REPLACE=1 replaces an existing fixture."
 	@echo "GROBID endpoint: set GROBID_URL to override the default http://localhost:8070/api/processFulltextDocument."
 	@echo ""
 	@echo "Compatibility targets:"
@@ -79,6 +86,10 @@ corpus-build:
 	$(MAKE) corpus-validate CORPUS=$(CORPUS)
 	$(MAKE) export-review-records CORPUS=$(CORPUS)
 	$(MAKE) export-catalog-records CORPUS=$(CORPUS)
+
+corpus-fixture:
+	echo $(FIXTURE_CMD)
+	$(FIXTURE_CMD)
 
 corpus-doctor:
 	echo $(DOCTOR_CMD)
