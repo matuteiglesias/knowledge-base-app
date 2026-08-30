@@ -6,6 +6,8 @@ import type { PaperSummary, SummaryGenerateRequest } from "@/api/types";
 
 type HttpError = Error & { status?: number };
 
+type SummaryProvider = "mock" | "agent-framework";
+
 export function usePaperSummary(paperId?: string | null) {
   const qc = useQueryClient();
   const key = ["paperSummary", paperId];
@@ -29,7 +31,7 @@ export function usePaperSummary(paperId?: string | null) {
   const mutation = useMutation({
     mutationFn: async (input?: Partial<SummaryGenerateRequest>) => {
       if (!paperId) throw new Error("Missing paper id");
-      return generatePaperSummary(paperId, { provider: "mock", force: false, ...(input || {}) });
+      return generatePaperSummary(paperId, { provider: "agent-framework", force: false, ...(input || {}) });
     },
     onSuccess: (data) => qc.setQueryData(key, data),
   });
@@ -38,8 +40,8 @@ export function usePaperSummary(paperId?: string | null) {
     summary: q.data ?? null,
     loading: q.isLoading,
     error: q.error,
-    generate: (provider: "mock" | "agent-framework" = "mock") => mutation.mutate({ provider, force: false }),
-    regenerate: (provider: "mock" | "agent-framework" = "mock") => mutation.mutate({ provider, force: true }),
+    generate: (provider: SummaryProvider = "agent-framework") => mutation.mutate({ provider, force: false }),
+    regenerate: (provider: SummaryProvider = "agent-framework") => mutation.mutate({ provider, force: true }),
     generating: mutation.isPending,
     reload: () => q.refetch(),
   };
