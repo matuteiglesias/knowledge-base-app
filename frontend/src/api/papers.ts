@@ -26,13 +26,19 @@ export type SearchResults = {
   hits: SearchHit[];
 };
 
+type ApiValidationError = Error & {
+  status?: number;
+  body?: unknown;
+  validation?: HTTPValidationError;
+};
+
 async function typedGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   try {
     return await apiGet<T>(path, { signal });
-  } catch (err: any) {
-    if (err?.status === 422) {
-      const ve = (err?.body || {}) as HTTPValidationError;
-      (err as any).validation = ve;
+  } catch (error: unknown) {
+    const err = error as ApiValidationError;
+    if (err.status === 422) {
+      err.validation = (err.body || {}) as HTTPValidationError;
     }
     throw err;
   }
