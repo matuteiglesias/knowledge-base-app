@@ -1,0 +1,5 @@
+requests>=2.31,<3
+python-dotenv>=1,<2
+pydantic>=2,<3
+lxml>=5,<7
+jsonschema>=4,<5

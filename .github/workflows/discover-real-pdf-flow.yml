@@ -1,0 +1,234 @@
+name: Real PDF end-to-end proof
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'fixture/real_samples/**'
+      - 'pipeline/**'
+      - 'backend/app/schemas.py'
+      - 'backend/app/storage_adapter.py'
+      - 'requirements-pipeline.txt'
+      - 'tests/test_tei_bibliographic_metadata.py'
+      - 'tests/test_grobid_consolidation_policy.py'
+      - 'tests/test_read_model_identity.py'
+      - '.github/workflows/discover-real-pdf-flow.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'fixture/real_samples/**'
+      - 'pipeline/**'
+      - 'backend/app/schemas.py'
+      - 'backend/app/storage_adapter.py'
+      - 'requirements-pipeline.txt'
+      - 'tests/test_tei_bibliographic_metadata.py'
+      - 'tests/test_grobid_consolidation_policy.py'
+      - 'tests/test_read_model_identity.py'
+      - '.github/workflows/discover-real-pdf-flow.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      GROBID_URL: http://localhost:8070/api/processFulltextDocument
+      CHUNKS_DIR: /tmp/paper-kb-real-flow/legacy-chunks
+      PAPERS_DIR: /tmp/paper-kb-real-flow/papers
+      PAPER_KB_CHUNK_SETS_DIR: /tmp/paper-kb-real-flow/chunk-sets
+      GROBID_IMAGE: grobid/grobid@sha256:24ba90eb1c959f65d812bcdb2cf79c677fa5fd7b95235de616b8bc9fa1317849
+      KNOWLEDGE_INSPECT_COMMIT: 17a4c9810b30a612536970048e56b24cfe1b0fb7
+      ABSTRACT_SCROLLER_COMMIT: 6a738edd28d21bf54d6c52943883fee19f4cc033
+      KNOWLEDGE_EXPERIENCES_COMMIT: 7e6623a92fdd8c37fab953f7cbc65a27015f768c
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact approved PDF inputs
+        run: sha256sum -c fixture/real_samples/SHA256SUMS
+      - name: Install governed pipeline dependencies
+        run: python -m pip install -q -r requirements-pipeline.txt pytest fastapi
+      - name: Start digest-pinned GROBID 0.9.0 CRF service
+        run: |
+          docker pull "$GROBID_IMAGE"
+          docker run -d --name grobid --init --ulimit core=0 -p 8070:8070 -p 8071:8071 "$GROBID_IMAGE"
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8070/api/isalive >/dev/null; then
+              echo 'GROBID is alive'
+              exit 0
+            fi
+            sleep 5
+          done
+          docker logs grobid
+          exit 1
+      - name: Process both PDFs to ephemeral TEI without external header consolidation
+        run: |
+          mkdir -p /tmp/paper-kb-real-flow/tei /tmp/paper-kb-real-flow/legacy-chunks /tmp/paper-kb-real-flow/chunk-sets /tmp/paper-kb-real-flow/papers
+          python -m pipeline.adapter.manager grobid fixture/real_samples/raw /tmp/paper-kb-real-flow/tei --max-files 2 --timeout 300 --max-retries 2 --force --no-consolidate-header | tee /tmp/grobid-summary.json
+          test "$(find /tmp/paper-kb-real-flow/tei -maxdepth 1 -type f -name '*.xml' | wc -l)" -eq 2
+      - name: Inspect structured TEI metadata without printing source text
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from pipeline.parsers.tei_parser import parse_tei_file
+          rows=[]
+          for path in sorted(Path('/tmp/paper-kb-real-flow/tei').glob('*.xml')):
+              parsed=parse_tei_file(path)
+              rows.append({
+                  'tei_file':path.name,
+                  'doi':parsed.get('doi'),
+                  'arxiv_id':parsed.get('arxiv_id'),
+                  'date':parsed.get('date'),
+                  'year':parsed.get('year'),
+                  'venue':parsed.get('venue'),
+                  'abstract_chars':len(parsed.get('abstract') or ''),
+                  'keyword_count':len(parsed.get('keywords') or []),
+                  'authors_count':len(parsed.get('authors') or []),
+                  'chunk_count_raw':len(parsed.get('chunks') or []),
+              })
+          print('TEI_METADATA_REPORT='+json.dumps(rows,sort_keys=True))
+          PY
+      - name: Parse TEI to canonical chunk sets
+        run: |
+          python -m pipeline.adapter.manager parse /tmp/paper-kb-real-flow/tei /tmp/paper-kb-real-flow/legacy-chunks --chunk-set-dir /tmp/paper-kb-real-flow/chunk-sets --force | tee /tmp/parse-summary.json
+          test "$(find /tmp/paper-kb-real-flow/chunk-sets -maxdepth 1 -type f -name '*.chunk_set.json' | wc -l)" -eq 2
+      - name: Project canonical review and catalog records
+        run: |
+          python -m pipeline.projections.review_records --chunk-set-dir /tmp/paper-kb-real-flow/chunk-sets --out /tmp/paper-kb-real-flow/paper.review-record.v1.jsonl | tee /tmp/review-summary.json
+          python -m pipeline.projections.catalog_records --chunk-set-dir /tmp/paper-kb-real-flow/chunk-sets --out /tmp/paper-kb-real-flow/paper.catalog-record.v1.jsonl | tee /tmp/catalog-summary.json
+      - name: Prove exact Paper KB read model over generated chunk sets
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from backend.app.schemas import PaperMeta
+          from backend.app.storage_adapter import ChunkSetStorageAdapter
+          adapter=ChunkSetStorageAdapter('/tmp/paper-kb-real-flow/chunk-sets')
+          papers=adapter.list_papers()
+          assert len(papers)==2, papers
+          typed=[PaperMeta(**paper) for paper in papers]
+          catalog=[json.loads(x) for x in Path('/tmp/paper-kb-real-flow/paper.catalog-record.v1.jsonl').read_text().splitlines() if x.strip()]
+          by_uid={row['paper_uid']:row for row in catalog}
+          assert set(by_uid)=={paper.paper_uid for paper in typed}
+          for paper in typed:
+              row=by_uid[paper.paper_uid]
+              assert paper.title==row['title']
+              assert (paper.authors or [])==row['authors']
+              assert paper.abstract==row['abstract']
+              assert paper.date==row['date']
+              assert paper.year==row['year']
+              assert paper.venue==row['venue']
+              assert paper.doi==row['doi']
+              assert paper.arxiv_id==row['arxiv_id']
+              assert (paper.tags or [])==row['tags']
+          print('PAPER_KB_READ_MODEL_REAL_FLOW=pass')
+          PY
+      - name: Validate exact chunk sets with current Knowledge Inspect consumer
+        run: |
+          git clone -q https://github.com/matuteiglesias/knowledge-inspect.git /tmp/knowledge-inspect
+          git -C /tmp/knowledge-inspect checkout -q "$KNOWLEDGE_INSPECT_COMMIT"
+          for artifact in /tmp/paper-kb-real-flow/chunk-sets/*.chunk_set.json; do
+            PYTHONPATH=/tmp/knowledge-inspect python -m kb.cli.kb_validate_chunk_set "$artifact" --format text
+          done
+      - name: Compile exact review records with current Abstract Scroller consumer
+        run: |
+          git clone -q https://github.com/matuteiglesias/abstract-scroller.git /tmp/abstract-scroller
+          git -C /tmp/abstract-scroller checkout -q "$ABSTRACT_SCROLLER_COMMIT"
+          python -m pip install -q -e /tmp/abstract-scroller
+          cd /tmp/abstract-scroller
+          python -m backend.jobs.mvp_snapshot --input /tmp/paper-kb-real-flow/paper.review-record.v1.jsonl --format paper_review_record_jsonl --out /tmp/paper-kb-real-flow/scroller-snapshot
+          python -m backend.publish.manifest --validate /tmp/paper-kb-real-flow/scroller-snapshot
+      - name: Build exact catalog with current Knowledge Experiences consumer
+        run: |
+          git clone -q https://github.com/matuteiglesias/knowledge-experiences.git /tmp/knowledge-experiences
+          git -C /tmp/knowledge-experiences checkout -q "$KNOWLEDGE_EXPERIENCES_COMMIT"
+          python -m pip install -q --no-deps -e /tmp/knowledge-experiences
+          mkdir -p /tmp/paper-kb-real-flow/kx
+          cp /tmp/paper-kb-real-flow/paper.catalog-record.v1.jsonl /tmp/paper-kb-real-flow/kx/catalog.jsonl
+          cat > /tmp/paper-kb-real-flow/kx/collection.json <<EOF
+          {
+            "schema_id":"knowledge.collection-spec",
+            "schema_version":1,
+            "collection_id":"paper-kb-real-pdf-proof",
+            "title":"Paper KB real PDF proof",
+            "source":{"adapter":"paper-catalog-jsonl","path":"catalog.jsonl","authority":"repo.paper-kb","release_id":"git:${GITHUB_SHA}"},
+            "selection":{"mode":"all"}
+          }
+          EOF
+          cat > /tmp/paper-kb-real-flow/kx/experience.json <<'EOF'
+          {
+            "schema_id":"knowledge.experience-spec",
+            "schema_version":1,
+            "experience_id":"paper-kb-real-pdf-proof",
+            "title":"Paper KB real PDF proof",
+            "collection_spec":"collection.json",
+            "renderer":"static-navigator",
+            "visibility":"private",
+            "capabilities":{"search":true,"facets":["author","year","venue"]},
+            "navigation":{"default_sort":"title"}
+          }
+          EOF
+          kx doctor /tmp/paper-kb-real-flow/kx/experience.json
+          kx build /tmp/paper-kb-real-flow/kx/experience.json --out /tmp/paper-kb-real-flow/kx-release
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          release=json.loads(Path('/tmp/paper-kb-real-flow/kx-release/collection.release.json').read_text())
+          catalog=[json.loads(x) for x in Path('/tmp/paper-kb-real-flow/paper.catalog-record.v1.jsonl').read_text().splitlines() if x.strip()]
+          expected={x['paper_uid'] for x in catalog}
+          actual={x['item_id'] for x in release['items']}
+          assert len(release['items']) == 2
+          assert actual == expected, (actual, expected)
+          print('KNOWLEDGE_EXPERIENCES_REAL_CATALOG=pass')
+          PY
+      - name: Report non-textual evidence only
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root=Path('/tmp/paper-kb-real-flow')
+          rows=[]
+          for path in sorted((root/'chunk-sets').glob('*.chunk_set.json')):
+              p=json.loads(path.read_text())
+              pm=p.get('paper_meta',{})
+              rows.append({
+                  'artifact': path.name,
+                  'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                  'paper_uid': pm.get('paper_uid'),
+                  'authors_count': len(pm.get('authors') or []),
+                  'abstract_chars': len(pm.get('abstract') or ''),
+                  'date': pm.get('date'),
+                  'year': pm.get('year'),
+                  'venue': pm.get('venue'),
+                  'doi': pm.get('doi'),
+                  'arxiv_id': pm.get('arxiv_id'),
+                  'tag_count': len(pm.get('tags') or []),
+                  'chunk_count': p.get('chunk_count'),
+              })
+          review=[json.loads(x) for x in (root/'paper.review-record.v1.jsonl').read_text().splitlines() if x.strip()]
+          catalog=[json.loads(x) for x in (root/'paper.catalog-record.v1.jsonl').read_text().splitlines() if x.strip()]
+          snapshot_manifest=json.loads((root/'scroller-snapshot/manifest.json').read_text())
+          kx_release=json.loads((root/'kx-release/experience.release.json').read_text())
+          report={
+              'grobid_image_digest':'sha256:24ba90eb1c959f65d812bcdb2cf79c677fa5fd7b95235de616b8bc9fa1317849',
+              'grobid_consolidate_header':False,
+              'tei_count':len(list((root/'tei').glob('*.xml'))),
+              'chunk_sets':rows,
+              'review_count':len(review),
+              'review_uids':[x['paper_uid'] for x in review],
+              'catalog_count':len(catalog),
+              'catalog_uids':[x['paper_uid'] for x in catalog],
+              'abstract_scroller_snapshot_id':snapshot_manifest.get('snapshot_id'),
+              'knowledge_experiences_release_id':kx_release.get('release_id'),
+          }
+          print('REAL_PDF_FLOW_REPORT='+json.dumps(report,sort_keys=True))
+          PY
+      - name: Run relevant producer regressions
+        run: |
+          python -m pytest -q tests/test_tei_bibliographic_metadata.py tests/test_grobid_consolidation_policy.py tests/test_identity_contract.py tests/test_chunk_set_writer_contract.py tests/test_tei_runner_chunk_set_validation.py tests/test_review_record_projection.py tests/test_catalog_record_projection.py tests/test_read_model_identity.py
+      - name: GROBID logs on failure
+        if: failure()
+        run: docker logs --tail 200 grobid || true

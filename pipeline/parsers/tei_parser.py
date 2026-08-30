@@ -123,6 +123,71 @@ def extract_authors_from_lxml(root) -> List[str]:
     return authors
 
 
+def _normalized_text(node) -> Optional[str]:
+    if node is None:
+        return None
+    text = " ".join("".join(node.itertext()).split())
+    return text or None
+
+
+def _normalize_doi(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    value = value.strip()
+    value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value, flags=re.I)
+    value = re.sub(r"^doi:\s*", "", value, flags=re.I)
+    return value.strip() or None
+
+
+def _normalize_arxiv_id(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    value = value.strip()
+    match = re.search(r"(?:arxiv:\s*)?(\d{4}\.\d{4,5})(?:v\d+)?", value, flags=re.I)
+    if match:
+        return match.group(1)
+    value = re.sub(r"^arxiv:\s*", "", value, flags=re.I)
+    return value or None
+
+
+def extract_bibliographic_metadata_from_lxml(root) -> Dict[str, Any]:
+    def first_text(xpath: str) -> Optional[str]:
+        nodes = root.xpath(xpath, namespaces=NS)
+        if not nodes:
+            return None
+        value = nodes[0]
+        if isinstance(value, str):
+            value = " ".join(value.split())
+            return value or None
+        return _normalized_text(value)
+
+    doi = _normalize_doi(first_text('//tei:teiHeader//tei:idno[translate(@type,"doi","DOI")="DOI"]'))
+    arxiv_id = _normalize_arxiv_id(first_text('//tei:teiHeader//tei:idno[contains(translate(@type,"ARXIV","arxiv"),"arxiv")]'))
+    date = first_text('//tei:teiHeader//tei:sourceDesc//tei:date[@when]/@when') or first_text('//tei:teiHeader//tei:date[@when]/@when')
+    year = None
+    if date:
+        match = re.search(r"(?:^|\D)(\d{4})(?:\D|$)", date)
+        if match:
+            year = int(match.group(1))
+    abstract_nodes = root.xpath('//tei:teiHeader//tei:profileDesc//tei:abstract', namespaces=NS)
+    abstract = _normalized_text(abstract_nodes[0]) if abstract_nodes else None
+    venue = first_text('//tei:teiHeader//tei:sourceDesc//tei:monogr/tei:title')
+    keywords = []
+    for node in root.xpath('//tei:teiHeader//tei:keywords//tei:term', namespaces=NS):
+        value = _normalized_text(node)
+        if value and value not in keywords:
+            keywords.append(value)
+    return {
+        "doi": doi,
+        "arxiv_id": arxiv_id,
+        "date": date,
+        "year": year,
+        "abstract": abstract,
+        "venue": venue,
+        "keywords": keywords,
+    }
+
+
 def _assemble_chunk(xml_id: Optional[str],
                     text: str,
                     section_title: Optional[str],
@@ -299,9 +364,10 @@ def parse_tei_text(tei_text: str, canonical_id_fn=None) -> Dict[str, Any]:
         root = etree.fromstring(tei_text.encode("utf8"))
         title = extract_title_from_lxml(root)
         authors = extract_authors_from_lxml(root)
+        bibliographic = extract_bibliographic_metadata_from_lxml(root)
         chunks = walk_body_to_chunks_lxml(root, canonical_id_fn=canonical_id_fn)
         paper_id = canonical_id_fn(title) if canonical_id_fn else (title or "paper")
-        return {"title": title, "authors": authors, "chunks": chunks, "paper_id": paper_id}
+        return {"title": title, "authors": authors, "chunks": chunks, "paper_id": paper_id, **bibliographic}
 
     if BS4_AVAILABLE:
         soup = BeautifulSoup(tei_text, features="xml")

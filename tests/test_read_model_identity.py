@@ -31,7 +31,13 @@ class ReadModelIdentityTest(unittest.TestCase):
                     "paper_id": "legacy-paper-id",
                     "title": "Identity preservation proof",
                     "authors": ["Synthetic Author"],
-                    "source_file": "paper.xml"
+                    "source_file": "paper.xml",
+                    "abstract": "Governed abstract",
+                    "date": "2024-01-04",
+                    "year": 2024,
+                    "venue": "Example Venue",
+                    "arxiv_id": "2401.02013",
+                    "tags": ["proof"]
                 },
                 "chunks": [
                     {
@@ -60,6 +66,10 @@ class ReadModelIdentityTest(unittest.TestCase):
             api_model = PaperMeta(**paper)
             self.assertEqual(api_model.paper_id, "legacy-paper-id")
             self.assertEqual(api_model.paper_uid, "doi:10.0000/p5.identity")
+            self.assertEqual(api_model.abstract, "Governed abstract")
+            self.assertEqual(api_model.year, 2024)
+            self.assertEqual(api_model.arxiv_id, "2401.02013")
+            self.assertEqual(api_model.tags, ["proof"])
 
             chunks = adapter.list_chunks("legacy-paper-id")["chunks"]
             self.assertEqual(chunks[0]["paper_uid"], "doi:10.0000/p5.identity")
