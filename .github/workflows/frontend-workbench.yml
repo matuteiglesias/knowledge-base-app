@@ -3,12 +3,14 @@ name: Paper workbench frontend
 on:
   pull_request:
     paths:
+      - "Makefile"
       - "frontend/**"
       - ".github/workflows/frontend-workbench.yml"
   push:
     branches:
       - main
     paths:
+      - "Makefile"
       - "frontend/**"
       - ".github/workflows/frontend-workbench.yml"
 
@@ -18,21 +20,26 @@ permissions:
 jobs:
   frontend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+      - name: Prove API and frontend ports are distinct
+        run: |
+          rendered="$(make -n frontend-dev PORT=9000 FRONTEND_PORT=3000)"
+          echo "$rendered"
+          grep -F 'PORT=3000 NEXT_PUBLIC_API_BASE=http://127.0.0.1:9000 npm run dev' <<<"$rendered"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install locked dependencies
+        working-directory: frontend
         run: npm ci
       - name: Lint
+        working-directory: frontend
         run: npm run lint
       - name: Build
+        working-directory: frontend
         env:
           NEXT_PUBLIC_API_BASE: http://127.0.0.1:9000
         run: npm run build
