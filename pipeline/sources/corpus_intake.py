@@ -93,10 +93,22 @@ def _load_manifest(path: Path) -> dict[str, Any] | None:
 
 def _verify_registered_pdfs(pdfs_dir: Path, records: list[dict[str, Any]]) -> bool:
     expected_names = {record["registered_filename"] for record in records}
-    actual = sorted(path for path in pdfs_dir.glob("*.pdf") if path.is_file()) if pdfs_dir.exists() else []
+    actual = (
+        sorted(path for path in pdfs_dir.iterdir() if path.is_file() and path.suffix.lower() == ".pdf")
+        if pdfs_dir.exists()
+        else []
+    )
     if {path.name for path in actual} != expected_names:
         return False
     return all(_sha256_file(pdfs_dir / record["registered_filename"]) == record["sha256"] for record in records)
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
 
 
 def register_pdf_directory(
@@ -118,11 +130,14 @@ def register_pdf_directory(
 
     name = _validate_corpus_name(corpus)
     source_root = Path(source_dir).expanduser().resolve()
+    cp = resolve_corpus_paths(name, repo_root=repo_root)
+    if _is_within(source_root, cp.root):
+        raise ValueError("source directory must be outside the target corpus directory")
+
     pdfs = discover_pdfs(source_root, recursive=recursive)
     records = _file_records(source_root, pdfs)
     input_set_sha256 = _canonical_sha256(records)
 
-    cp = resolve_corpus_paths(name, repo_root=repo_root)
     manifest_path = cp.root / "source-manifest.json"
     existing = _load_manifest(manifest_path)
 
@@ -148,8 +163,8 @@ def register_pdf_directory(
         )
 
     if not existing and cp.root.exists():
-        nonempty = [path for path in cp.root.iterdir() if path.name != "source-manifest.json"]
-        if nonempty and not replace:
+        local_files = [path for path in cp.root.rglob("*") if path.is_file()]
+        if local_files and not replace:
             raise RuntimeError(
                 f"corpus directory already contains local state without a matching source manifest: {cp.root}; use --replace only after review"
             )
