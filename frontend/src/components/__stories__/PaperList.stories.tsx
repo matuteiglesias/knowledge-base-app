@@ -1,22 +1,43 @@
-import React from "react";
-import { Meta, StoryFn } from "@storybook/react";
+import type { Meta, StoryObj } from "@storybook/react";
 import PaperList from "@/components/presentational/PaperList";
-import type { PaperMeta } from "@/api/types";
-
-export default {
-  title: "PaperList",
-  component: PaperList,
-} as Meta;
+import type { PaperMeta } from "@/lib/normalizers";
 
 const samplePapers: PaperMeta[] = [
-  { paperId: "p1", title: "Paper One", authors: ["A. Author"], nChunks: 3, preview: "short preview" },
-  { paperId: "p2", title: "Second Paper", authors: ["B. Writer"], nChunks: 5 },
+  {
+    paperId: "paper_demo_1",
+    paperUid: "paper_demo_1",
+    title: "Paper One",
+    authors: ["A. Author"],
+    nChunks: 3,
+    preview: "short preview",
+    tags: [],
+  },
+  {
+    paperId: "paper_demo_2",
+    paperUid: "paper_demo_2",
+    title: "Second Paper",
+    authors: ["B. Writer"],
+    nChunks: 5,
+    tags: [],
+  },
 ];
 
-const Template: StoryFn = (args) => <PaperList {...args} />;
+const meta = {
+  title: "Workbench/PaperList",
+  component: PaperList,
+  args: {
+    onOpen: () => undefined,
+    onSelect: () => undefined,
+  },
+} satisfies Meta<typeof PaperList>;
 
-export const Empty = Template.bind({});
-Empty.args = { papers: [], onOpen: () => {}, onSelect: () => {} };
+export default meta;
+type Story = StoryObj<typeof meta>;
 
-export const WithItems = Template.bind({});
-WithItems.args = { papers: samplePapers, onOpen: (p) => console.log("open", p.paperId), onSelect: (p) => console.log("select", p.paperId) };
+export const Empty: Story = {
+  args: { papers: [] },
+};
+
+export const WithItems: Story = {
+  args: { papers: samplePapers },
+};
