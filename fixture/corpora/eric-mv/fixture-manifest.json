@@ -1,0 +1,67 @@
+{
+  "absolute_paths_recorded": false,
+  "catalog_record_files": 1,
+  "chunk_set_count": 0,
+  "copied_artifacts": [
+    {
+      "path": "catalog/paper.catalog-record.v1.jsonl",
+      "sha256": "273a484b873d5ae6f9041b24e3c8b4906d23d0683b26941c95713665353f1b41",
+      "size_bytes": 2766
+    },
+    {
+      "path": "review/paper.review-record.v1.jsonl",
+      "sha256": "6a98c3e99b0329159b04a230b347afd51b68bb55fa287f10a9fdf0f2ef00fa81",
+      "size_bytes": 2433
+    }
+  ],
+  "corpus_id": "eric-mv",
+  "fixture_level": "metadata",
+  "omitted": [
+    "pdfs",
+    "xmls",
+    "chunks",
+    "runtime state"
+  ],
+  "review_record_files": 1,
+  "rights_note": "metadata fixture: source PDFs are represented only by filename/size/SHA-256",
+  "schema_id": "paper-kb.corpus-fixture-manifest",
+  "schema_version": 1,
+  "source_pdf_count": 7,
+  "source_pdfs": [
+    {
+      "path": "pdfs/1-s2.0-S0304387823001256-main.pdf",
+      "sha256": "20f5e94780321a0dede9cac2a2c0f7bb8af720ae39a1be0d19bf58fd773fea5d",
+      "size_bytes": 691805
+    },
+    {
+      "path": "pdfs/clan_chief_selection_liberia.pdf",
+      "sha256": "3eb54ce9073997cdb952a379763a6d8621fd7c2fee27a91679bb185a45eec490",
+      "size_bytes": 644756
+    },
+    {
+      "path": "pdfs/goldberg_wibbels_mvukiyehe2008.pdf",
+      "sha256": "5d515d3244051bbcc769c7ca2ed9dc0220defa893b8093858cd4649d741ff41b",
+      "size_bytes": 403001
+    },
+    {
+      "path": "pdfs/mvukiyehe2020.pdf",
+      "sha256": "c2bebe9fe702a8bb4caf2289ef15910332b09165bbb19b47d7c8f2ba77259324",
+      "size_bytes": 308163
+    },
+    {
+      "path": "pdfs/ssrn-1911968.pdf",
+      "sha256": "cab9a53ae0c461b801f85aca52aacf2f1fcf2dc03c41515b3d2be5f097c72dcb",
+      "size_bytes": 897742
+    },
+    {
+      "path": "pdfs/ssrn-3091975.pdf",
+      "sha256": "cd4d10dad5798a441a9150e135799282b0900f75e88ab000a92cf5eb5c6d3266",
+      "size_bytes": 1411334
+    },
+    {
+      "path": "pdfs/ssrn-3406764.pdf",
+      "sha256": "71689613b0ede7284651c41b31b1870a50d0984ee710a558f9cbb427669ef866",
+      "size_bytes": 4858440
+    }
+  ]
+}
