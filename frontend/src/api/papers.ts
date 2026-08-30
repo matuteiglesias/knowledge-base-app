@@ -10,6 +10,22 @@ import type {
 } from "@/api/types";
 import { apiGet, apiPost } from "@/lib/api";
 
+export type SearchHit = {
+  id: string;
+  text: string;
+  score?: number | null;
+  meta?: Record<string, unknown> | null;
+  chunk_id?: string | null;
+  paper_id?: string | null;
+};
+
+export type SearchResults = {
+  capability: string;
+  query: string;
+  k: number;
+  hits: SearchHit[];
+};
+
 async function typedGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   try {
     return await apiGet<T>(path, { signal });
@@ -48,6 +64,17 @@ export async function fetchPaperChunks(
   return typedGet<PaperChunksResponse>(`/api/papers/${encodeURIComponent(paperId)}/chunks?${params}`, signal);
 }
 
+export async function searchPaperChunks(
+  q: string,
+  opts?: { k?: number; paperId?: string | null },
+  signal?: AbortSignal
+): Promise<SearchResults> {
+  return apiPost<SearchResults>(
+    "/api/search",
+    { q, k: opts?.k ?? 20, paper_id: opts?.paperId || null },
+    { signal }
+  );
+}
 
 export async function fetchPaperSummary(paperId: string, signal?: AbortSignal): Promise<PaperSummary> {
   return typedGet<PaperSummary>(`/api/papers/${encodeURIComponent(paperId)}/summary`, signal);
