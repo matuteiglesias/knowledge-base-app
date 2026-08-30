@@ -1,0 +1,132 @@
+{
+  "absolute_paths_recorded": false,
+  "catalog_record_files": 1,
+  "chunk_set_count": 0,
+  "copied_artifacts": [
+    {
+      "path": "catalog/paper.catalog-record.v1.jsonl",
+      "sha256": "648d8461929629e5b13385510048f77ead7000b98318fdf87d22fe9332f28a1f",
+      "size_bytes": 7969
+    },
+    {
+      "path": "review/paper.review-record.v1.jsonl",
+      "sha256": "3508d2ca86dd1c1767c4428d18e426863e8e0427b9f2bb2a3d5d7d4103a577db",
+      "size_bytes": 6578
+    },
+    {
+      "path": "source-manifest.json",
+      "sha256": "0d04ac9a1d91e1433fbf9686c03b9b4ebf80a5a5d7800f62b2af53ea2e3f5c23",
+      "size_bytes": 5805
+    }
+  ],
+  "corpus_id": "tesis-cited",
+  "fixture_level": "metadata",
+  "omitted": [
+    "pdfs",
+    "xmls",
+    "chunks",
+    "runtime state"
+  ],
+  "review_record_files": 1,
+  "rights_note": "metadata fixture: source PDFs are represented only by filename/size/SHA-256",
+  "schema_id": "paper-kb.corpus-fixture-manifest",
+  "schema_version": 1,
+  "source_pdf_count": 19,
+  "source_pdfs": [
+    {
+      "path": "pdfs/1-s2.0-S2949948825000204-main.pdf",
+      "sha256": "38bc2b8f23083f69bf153ca0ed1afee142f7866262bb0c587d4dfe8c78ed06e0",
+      "size_bytes": 1845697
+    },
+    {
+      "path": "pdfs/11205_2024_Article_3386.pdf",
+      "sha256": "dba7bfbc9cdbfb07f9b5cd74a6b00358ca1e589ad995a7c9ebda3747a9987578",
+      "size_bytes": 2469142
+    },
+    {
+      "path": "pdfs/2010-quantile-regression.pdf",
+      "sha256": "357d5bf868656c0ad6d084bee076b402dfcefe9cf03d34ce997a6ace0daf95fb",
+      "size_bytes": 402063
+    },
+    {
+      "path": "pdfs/2504.16109v1.pdf",
+      "sha256": "f13ddc4dee4692ecff2069f7d6ee84c8ccc41ab27d28df8fbe035f117d8da2db",
+      "size_bytes": 2054273
+    },
+    {
+      "path": "pdfs/2506.23849v2.pdf",
+      "sha256": "3b891c4c453f9bcf6f0c98c913a0e3d64d777405b22c73d9a27b06c293a2175d",
+      "size_bytes": 1831060
+    },
+    {
+      "path": "pdfs/Census2Vec Enhancing Socioeconomic.pdf",
+      "sha256": "c687f934b2e95f249ef118597836818217175e4a902ad49dca222f47a11739d9",
+      "size_bytes": 491825
+    },
+    {
+      "path": "pdfs/Deep_Neural_Networks_and_Tabular_Data_A_Survey.pdf",
+      "sha256": "df090759e010aa7c3b95ac84ca088be5c3386230cae9223a39de87e497483df2",
+      "size_bytes": 1988506
+    },
+    {
+      "path": "pdfs/Estimating-and-Forecasting-Income-Poverty-and-Inequality-in-Haiti-Using-Satellite-Imagery-and-Mobile-Phone-Data.pdf",
+      "sha256": "d91e3186e9b788f13e00f5f22f2199bd9236beacabc60a5f817b77f94da9b79f",
+      "size_bytes": 5838219
+    },
+    {
+      "path": "pdfs/GLO-DP-0519.pdf",
+      "sha256": "d3f57498ad02a73d2326781df964737e34e42507ebe75baa3811194c5d022939",
+      "size_bytes": 2300176
+    },
+    {
+      "path": "pdfs/Household_Surveys_Consumption_and_the_Measurement_of_Poverty_ESR_June2003.pdf",
+      "sha256": "6240dcc51c98ac67927633cc7428a34913aab2364068f30faf4b5ce7b6fe5dfc",
+      "size_bytes": 149671
+    },
+    {
+      "path": "pdfs/IDU0c1878458051a40470808a960c8b70982671b.pdf",
+      "sha256": "a399300392aa6f5a7735bb01fa2daabae38c75e2d6bad984872198c44855a68d",
+      "size_bytes": 1708923
+    },
+    {
+      "path": "pdfs/Journal of Economic Surveys - 2025 - Ul‐Durar - Distributional and Tail‐Dependent Perspectives in Economic Relationships A.pdf",
+      "sha256": "e30dd9bbca313d075bd8907af276a2eab3c71532a16be03d23ca28a0af151b97",
+      "size_bytes": 938402
+    },
+    {
+      "path": "pdfs/journal.pone.0338110.pdf",
+      "sha256": "36d8ba243abd8b4363e62ef104fd9378db118ddbc9ad8f34ab51cb3a42adc6cb",
+      "size_bytes": 52198299
+    },
+    {
+      "path": "pdfs/MICRO_LEVEL_ESTIMATION_OF_POVERTY_AND_IN.pdf",
+      "sha256": "cbd126b732e25191c77b0104dcc78b032ab0309768e4e53b52c4a56d167eae43",
+      "size_bytes": 89707
+    },
+    {
+      "path": "pdfs/s40537-022-00559-6.pdf",
+      "sha256": "5b39d08d8772f28a7983c65936cd7c7963543ea30e948e841af7bdf906858b05",
+      "size_bytes": 2723670
+    },
+    {
+      "path": "pdfs/sahakyan2021.pdf",
+      "sha256": "5f6bb323439ea2ac8a4bf2f94327dc6a48e98389a7e014e74ed1e9c2e2015daf",
+      "size_bytes": 4431913
+    },
+    {
+      "path": "pdfs/SCWP119_The-Missing-Rich-in-Household-Surveys-Ext_Lustig-Vigorito_Dec25.pdf",
+      "sha256": "54e365caaa5eb69b0aef5cee09c1a9924fbc667efcc8d54e5a66a521dc48e07f",
+      "size_bytes": 928087
+    },
+    {
+      "path": "pdfs/ssrn-997829.pdf",
+      "sha256": "3c29c57451f0360be60a699f189f99df0748022f5f7395883d41959532134ddd",
+      "size_bytes": 718226
+    },
+    {
+      "path": "pdfs/tul1801.pdf",
+      "sha256": "030e3c316ec42f183363d9a1a780da1a9b24669e3609b0f3067c0ec0192b5376",
+      "size_bytes": 680465
+    }
+  ]
+}

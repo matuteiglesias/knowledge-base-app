@@ -1,0 +1,130 @@
+{
+  "authority_note": "This manifest governs the exact registered PDF byte set; it does not grant publication rights.",
+  "corpus_id": "tesis-cited",
+  "files": [
+    {
+      "registered_filename": "1-s2.0-S2949948825000204-main.pdf",
+      "sha256": "38bc2b8f23083f69bf153ca0ed1afee142f7866262bb0c587d4dfe8c78ed06e0",
+      "size_bytes": 1845697,
+      "source_relative_path": "1-s2.0-S2949948825000204-main.pdf"
+    },
+    {
+      "registered_filename": "11205_2024_Article_3386.pdf",
+      "sha256": "dba7bfbc9cdbfb07f9b5cd74a6b00358ca1e589ad995a7c9ebda3747a9987578",
+      "size_bytes": 2469142,
+      "source_relative_path": "11205_2024_Article_3386.pdf"
+    },
+    {
+      "registered_filename": "2010-quantile-regression.pdf",
+      "sha256": "357d5bf868656c0ad6d084bee076b402dfcefe9cf03d34ce997a6ace0daf95fb",
+      "size_bytes": 402063,
+      "source_relative_path": "2010-quantile-regression.pdf"
+    },
+    {
+      "registered_filename": "2504.16109v1.pdf",
+      "sha256": "f13ddc4dee4692ecff2069f7d6ee84c8ccc41ab27d28df8fbe035f117d8da2db",
+      "size_bytes": 2054273,
+      "source_relative_path": "2504.16109v1.pdf"
+    },
+    {
+      "registered_filename": "2506.23849v2.pdf",
+      "sha256": "3b891c4c453f9bcf6f0c98c913a0e3d64d777405b22c73d9a27b06c293a2175d",
+      "size_bytes": 1831060,
+      "source_relative_path": "2506.23849v2.pdf"
+    },
+    {
+      "registered_filename": "Census2Vec Enhancing Socioeconomic.pdf",
+      "sha256": "c687f934b2e95f249ef118597836818217175e4a902ad49dca222f47a11739d9",
+      "size_bytes": 491825,
+      "source_relative_path": "Census2Vec Enhancing Socioeconomic.pdf"
+    },
+    {
+      "registered_filename": "Deep_Neural_Networks_and_Tabular_Data_A_Survey.pdf",
+      "sha256": "df090759e010aa7c3b95ac84ca088be5c3386230cae9223a39de87e497483df2",
+      "size_bytes": 1988506,
+      "source_relative_path": "Deep_Neural_Networks_and_Tabular_Data_A_Survey.pdf"
+    },
+    {
+      "registered_filename": "Estimating-and-Forecasting-Income-Poverty-and-Inequality-in-Haiti-Using-Satellite-Imagery-and-Mobile-Phone-Data.pdf",
+      "sha256": "d91e3186e9b788f13e00f5f22f2199bd9236beacabc60a5f817b77f94da9b79f",
+      "size_bytes": 5838219,
+      "source_relative_path": "Estimating-and-Forecasting-Income-Poverty-and-Inequality-in-Haiti-Using-Satellite-Imagery-and-Mobile-Phone-Data.pdf"
+    },
+    {
+      "registered_filename": "GLO-DP-0519.pdf",
+      "sha256": "d3f57498ad02a73d2326781df964737e34e42507ebe75baa3811194c5d022939",
+      "size_bytes": 2300176,
+      "source_relative_path": "GLO-DP-0519.pdf"
+    },
+    {
+      "registered_filename": "Household_Surveys_Consumption_and_the_Measurement_of_Poverty_ESR_June2003.pdf",
+      "sha256": "6240dcc51c98ac67927633cc7428a34913aab2364068f30faf4b5ce7b6fe5dfc",
+      "size_bytes": 149671,
+      "source_relative_path": "Household_Surveys_Consumption_and_the_Measurement_of_Poverty_ESR_June2003.pdf"
+    },
+    {
+      "registered_filename": "IDU0c1878458051a40470808a960c8b70982671b.pdf",
+      "sha256": "a399300392aa6f5a7735bb01fa2daabae38c75e2d6bad984872198c44855a68d",
+      "size_bytes": 1708923,
+      "source_relative_path": "IDU0c1878458051a40470808a960c8b70982671b.pdf"
+    },
+    {
+      "registered_filename": "Journal of Economic Surveys - 2025 - Ul‐Durar - Distributional and Tail‐Dependent Perspectives in Economic Relationships A.pdf",
+      "sha256": "e30dd9bbca313d075bd8907af276a2eab3c71532a16be03d23ca28a0af151b97",
+      "size_bytes": 938402,
+      "source_relative_path": "Journal of Economic Surveys - 2025 - Ul‐Durar - Distributional and Tail‐Dependent Perspectives in Economic Relationships A.pdf"
+    },
+    {
+      "registered_filename": "journal.pone.0338110.pdf",
+      "sha256": "36d8ba243abd8b4363e62ef104fd9378db118ddbc9ad8f34ab51cb3a42adc6cb",
+      "size_bytes": 52198299,
+      "source_relative_path": "journal.pone.0338110.pdf"
+    },
+    {
+      "registered_filename": "MICRO_LEVEL_ESTIMATION_OF_POVERTY_AND_IN.pdf",
+      "sha256": "cbd126b732e25191c77b0104dcc78b032ab0309768e4e53b52c4a56d167eae43",
+      "size_bytes": 89707,
+      "source_relative_path": "MICRO_LEVEL_ESTIMATION_OF_POVERTY_AND_IN.pdf"
+    },
+    {
+      "registered_filename": "s40537-022-00559-6.pdf",
+      "sha256": "5b39d08d8772f28a7983c65936cd7c7963543ea30e948e841af7bdf906858b05",
+      "size_bytes": 2723670,
+      "source_relative_path": "s40537-022-00559-6.pdf"
+    },
+    {
+      "registered_filename": "sahakyan2021.pdf",
+      "sha256": "5f6bb323439ea2ac8a4bf2f94327dc6a48e98389a7e014e74ed1e9c2e2015daf",
+      "size_bytes": 4431913,
+      "source_relative_path": "sahakyan2021.pdf"
+    },
+    {
+      "registered_filename": "SCWP119_The-Missing-Rich-in-Household-Surveys-Ext_Lustig-Vigorito_Dec25.pdf",
+      "sha256": "54e365caaa5eb69b0aef5cee09c1a9924fbc667efcc8d54e5a66a521dc48e07f",
+      "size_bytes": 928087,
+      "source_relative_path": "SCWP119_The-Missing-Rich-in-Household-Surveys-Ext_Lustig-Vigorito_Dec25.pdf"
+    },
+    {
+      "registered_filename": "ssrn-997829.pdf",
+      "sha256": "3c29c57451f0360be60a699f189f99df0748022f5f7395883d41959532134ddd",
+      "size_bytes": 718226,
+      "source_relative_path": "ssrn-997829.pdf"
+    },
+    {
+      "registered_filename": "tul1801.pdf",
+      "sha256": "030e3c316ec42f183363d9a1a780da1a9b24669e3609b0f3067c0ec0192b5376",
+      "size_bytes": 680465,
+      "source_relative_path": "tul1801.pdf"
+    }
+  ],
+  "input_set_sha256": "0b0a0fba6f1333d1d968d1603c0537ccd8cbc580567c4f0e616e1759ac840c74",
+  "materialization": "copy",
+  "pdf_count": 19,
+  "recursive_discovery": true,
+  "registered_at_utc": "2026-08-30T01:29:48.975244Z",
+  "schema_id": "paper-kb.corpus-source-manifest",
+  "schema_version": 1,
+  "source_kind": "approved-local-pdf-directory",
+  "source_path_recorded": false,
+  "total_bytes": 83788324
+}
