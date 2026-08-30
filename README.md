@@ -9,11 +9,49 @@ Start with:
 - [`docs/contracts/paper-review-record.md`](docs/contracts/paper-review-record.md) — producer-owned review contract;
 - [`docs/contracts/paper-catalog-record.md`](docs/contracts/paper-catalog-record.md) — producer-owned catalog/bibliography contract.
 
+## Register an existing local PDF directory
+
+Approved local PDF folders can be turned into named Paper KB corpus inputs without manually recreating the corpus layout.
+
+Preview first:
+
+```bash
+make corpus-register-dry-run CORPUS=fcv-literature SOURCE_DIR=/absolute/path/to/pdfs
+```
+
+Register the exact byte set:
+
+```bash
+make corpus-register CORPUS=fcv-literature SOURCE_DIR=/absolute/path/to/pdfs
+```
+
+Registration recursively discovers PDFs, fails closed on duplicate basenames, hashes every input, copies the verified bytes into `corpora/<name>/pdfs/`, and writes `corpora/<name>/source-manifest.json`. The manifest records relative source names, sizes and SHA-256 hashes but deliberately does not record the absolute local source path.
+
+Re-registering the same byte set is idempotent. If the input set changes, registration fails rather than mixing new source bytes with stale TEI/chunk outputs. After review, explicitly replace the snapshot with:
+
+```bash
+make corpus-register CORPUS=fcv-literature SOURCE_DIR=/absolute/path/to/pdfs REPLACE=1
+```
+
+`REPLACE=1` clears the old XML/chunk/chunk-set/review/catalog derivatives because they no longer correspond to the registered source snapshot. Raw and generated corpus bytes are gitignored by default; the source manifest remains reviewable but must not be committed when filenames or corpus membership are rights-sensitive.
+
+Registration does not call GROBID or parse papers. Once a corpus is registered, the existing stages remain available independently, or the full standard sequence can be invoked with:
+
+```bash
+make corpus-build CORPUS=fcv-literature
+```
+
+`corpus-build` performs the existing doctor → GROBID → parse → strict validation → review/catalog projection sequence. It therefore requires the normal GROBID/runtime prerequisites and should only be run for an explicitly approved corpus.
+
 ## Operator Make targets
 
 Run all commands from repo root.
 
 ```bash
+make corpus-register-dry-run CORPUS=my-corpus SOURCE_DIR=/path/to/pdfs
+make corpus-register CORPUS=my-corpus SOURCE_DIR=/path/to/pdfs
+make corpus-build CORPUS=my-corpus
+
 make corpus-doctor CORPUS=tesislcd
 make corpus-grobid CORPUS=tesislcd MAX_FILES=2
 make corpus-parse CORPUS=tesislcd
