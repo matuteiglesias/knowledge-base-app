@@ -69,11 +69,10 @@ def promote_corpus_fixture(
         )
 
     cp = resolve_corpus_paths(corpus, repo_root=repo_root)
-    repo = cp.repo_root
+    repo = cp.root.parent.parent
     target = repo / "fixture" / "corpora" / corpus
 
     pdfs = _glob_files(cp.pdfs, "*.pdf") + _glob_files(cp.pdfs, "*.PDF")
-    # de-duplicate case-insensitive glob overlap on case-sensitive filesystems
     pdfs = list({path.resolve(): path for path in pdfs}.values())
     if not pdfs:
         raise RuntimeError(f"cannot promote corpus fixture without source PDFs: {cp.pdfs}")
