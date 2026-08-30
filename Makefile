@@ -6,7 +6,7 @@ REPLACE ?=
 TOP_LEVEL_ONLY ?=
 FIXTURE_LEVEL ?= metadata
 ALLOW_TEXT_DERIVATIVES ?=
-FIXTURE_REPLACE ?=
+FIXTURE_REPLACE ?= $(REPLACE)
 PORT ?= 9000
 MAX_FILES ?=
 MIN_LEN ?= 50
@@ -51,7 +51,7 @@ help:
 	@echo "  make kill-port PORT=9000"
 	@echo ""
 	@echo "Registration flags: REPLACE=1 replaces an existing input snapshot and clears stale derived outputs; TOP_LEVEL_ONLY=1 disables recursive PDF discovery."
-	@echo "Fixture flags: FIXTURE_LEVEL=metadata|consumer; consumer requires ALLOW_TEXT_DERIVATIVES=1; FIXTURE_REPLACE=1 replaces an existing fixture."
+	@echo "Fixture flags: FIXTURE_LEVEL=metadata|consumer; consumer requires ALLOW_TEXT_DERIVATIVES=1; REPLACE=1 replaces an existing fixture (FIXTURE_REPLACE=1 remains supported)."
 	@echo "GROBID endpoint: set GROBID_URL to override the default http://localhost:8070/api/processFulltextDocument."
 	@echo ""
 	@echo "Compatibility targets:"
